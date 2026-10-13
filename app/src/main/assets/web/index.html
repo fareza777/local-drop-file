@@ -1,0 +1,743 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>LocalDrop</title>
+<style>
+:root{--pri:#4f46e5;--pri2:#eef2ff;--bg:#f4f5f9;--sur:#fff;--sur2:#fafbfc;--tx:#111827;--mut:#6b7280;--ln:#e5e7eb;--ok:#059669;--er:#dc2626;--hov:#f5f6fb;--sh:0 1px 2px rgba(0,0,0,.05)}
+:root.dark{--pri:#818cf8;--pri2:#26263f;--bg:#0f1115;--sur:#181b22;--sur2:#1d2029;--tx:#e5e7eb;--mut:#9ca3af;--ln:#2a2f3a;--ok:#34d399;--er:#f87171;--hov:#20242e;--sh:none}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--tx);font-size:14px;overflow:hidden}
+button,input,select{font:inherit;color:inherit}
+.app{display:grid;grid-template-columns:200px 1fr;height:100vh}
+aside{background:var(--sur);border-right:1px solid var(--ln);padding:14px 10px;display:flex;flex-direction:column;gap:3px;overflow-y:auto}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:16px;padding:4px 8px 14px}
+.logo{width:30px;height:30px;border-radius:9px;background:var(--pri);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800}
+.nav{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;cursor:pointer;border:0;background:none;text-align:left;width:100%}
+.nav:hover{background:var(--hov)}
+.nav.on{background:var(--pri2);color:var(--pri);font-weight:600}
+.nav .ic{width:18px;text-align:center}
+.sec{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);padding:14px 10px 4px}
+.conn{margin-top:auto;font-size:12px;color:var(--mut);display:flex;align-items:center;gap:6px;padding:8px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok)}
+.dot.off{background:var(--er)}
+main{display:flex;flex-direction:column;min-width:0;min-height:0}
+.top{background:var(--sur);border-bottom:1px solid var(--ln);padding:10px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.nv{display:flex;gap:2px}
+.iconbtn{border:1px solid var(--ln);background:var(--sur);border-radius:8px;width:32px;height:32px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;color:var(--mut)}
+.iconbtn:hover{background:var(--hov);color:var(--tx)}
+.iconbtn:disabled{opacity:.35;cursor:not-allowed}
+.crumbs{display:flex;align-items:center;gap:2px;flex-wrap:wrap;min-width:0;flex:1}
+.crumbs button{background:none;border:0;padding:4px 6px;border-radius:6px;cursor:pointer;color:var(--mut)}
+.crumbs button:hover,.crumbs button.dropHover{background:var(--pri2);color:var(--pri)}
+.crumbs button.cur{color:var(--tx);font-weight:600}
+.crumbs .sep{color:var(--mut);opacity:.5}
+.search{padding:7px 11px;border:1px solid var(--ln);border-radius:9px;width:190px;background:var(--sur2)}
+.btn{border:1px solid var(--ln);background:var(--sur);border-radius:9px;padding:7px 11px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;font-weight:500}
+.btn:hover{background:var(--hov)}
+.btn.pri{background:var(--pri);border-color:var(--pri);color:#fff}
+.btn.danger{color:var(--er)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.seg{display:flex;border:1px solid var(--ln);border-radius:9px;overflow:hidden}
+.seg button{border:0;background:var(--sur);padding:6px 10px;cursor:pointer;color:var(--mut)}
+.seg button.on{background:var(--pri);color:#fff}
+/* Scoped to the selection bar only: rows/cards also carry class "sel", and a bare
+   .sel{display:none} rule made selected rows vanish from the list view. */
+#selbar{display:none;align-items:center;gap:8px;padding:8px 14px;background:var(--pri2);border-bottom:1px solid var(--ln);flex-wrap:wrap}
+#selbar.show{display:flex}
+#selbar .cnt{font-weight:600;color:var(--pri);margin-right:auto}
+.zone{flex:1;min-height:0;overflow:auto;position:relative;background:var(--sur)}
+.zone.over::after{content:"Drop to upload here";position:absolute;inset:8px;border:2px dashed var(--pri);border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--pri);font-weight:600;background:rgba(79,70,229,.06);pointer-events:none;z-index:2}
+table{width:100%;border-collapse:collapse}
+thead th{position:sticky;top:0;background:var(--sur);text-align:left;font-size:12px;color:var(--mut);font-weight:600;padding:9px 12px;border-bottom:1px solid var(--ln);z-index:1;user-select:none}
+tbody td{padding:8px 12px;border-bottom:1px solid var(--ln);white-space:nowrap}
+tbody tr:hover{background:var(--hov)}
+tbody tr.sel{background:var(--pri2)}
+tbody tr.sel .name{color:var(--pri);font-weight:600}
+tbody td,.gcard .name,.name{-webkit-user-select:none;user-select:none}
+tbody tr.dropT{outline:2px dashed var(--pri);outline-offset:-2px}
+td.nm{width:100%;max-width:1px;overflow:hidden}
+.nmwrap{display:flex;align-items:center;gap:10px;min-width:0}
+.thumb{width:36px;height:36px;border-radius:8px;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;background:var(--pri2);color:var(--pri)}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.thumb.dir{background:#fff7e6;color:#b45309}
+.thumb.img{background:#ecfdf5;color:#047857}
+.thumb.doc{background:#eff6ff;color:#1d4ed8}
+.thumb.vid{background:#fdf2f8;color:#be185d}
+.thumb.arc{background:#f5f3ff;color:#6d28d9}
+.name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+.name:hover{color:var(--pri)}
+.num{text-align:right;color:var(--mut);width:110px}
+.dt{color:var(--mut);width:160px}
+td.act{width:1%;opacity:0}
+tbody tr:hover td.act{opacity:1}
+.ibtn{border:0;background:none;padding:5px 7px;border-radius:7px;cursor:pointer;color:var(--mut)}
+.ibtn:hover{background:var(--ln);color:var(--tx)}
+.ibtn.del:hover{color:var(--er)}
+input.chk{width:16px;height:16px;accent-color:var(--pri);cursor:pointer}
+.empty{padding:60px 20px;text-align:center;color:var(--mut)}
+/* grid sizes */
+.grid{display:grid;gap:10px;padding:14px;grid-template-columns:repeat(auto-fill,minmax(var(--gs,140px),1fr))}
+.grid.small{--gs:100px}
+.grid.large{--gs:200px}
+.gcard{border:1px solid var(--ln);border-radius:12px;padding:10px;text-align:center;position:relative;cursor:pointer;background:var(--sur);display:flex;flex-direction:column;align-items:center;gap:8px;min-width:0}
+.gcard:hover{background:var(--hov)}
+.gcard.sel{background:var(--pri2);border-color:var(--pri)}
+.gcard.dropT{outline:2px dashed var(--pri)}
+.gcard .thumb{width:100%;height:var(--th,90px);border-radius:10px}
+.grid.large .gcard{--th:150px}
+.gcard .name{white-space:normal;word-break:break-word;font-size:13px;width:100%;overflow:visible;text-overflow:clip;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.gcard .chk{position:absolute;top:8px;left:8px}
+.gcard .sub{font-size:11px;color:var(--mut)}
+.uq{padding:10px 14px;display:grid;gap:6px;background:var(--sur2);border-bottom:1px solid var(--ln)}
+.uq:empty{display:none}
+.up{display:grid;gap:4px;font-size:12px}
+.up .r{display:flex;justify-content:space-between;gap:8px}
+.up .r span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bt{height:5px;background:var(--ln);border-radius:5px;overflow:hidden}
+.bf{height:100%;background:var(--pri);width:0;transition:width .15s}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;padding:16px;z-index:20}
+.modal.show{display:flex}
+.box{background:var(--sur);border-radius:14px;padding:18px;width:100%;max-width:400px;box-shadow:0 20px 50px rgba(0,0,0,.3)}
+.box h3{font-size:16px;margin-bottom:12px}
+.box p{color:var(--mut);margin-bottom:10px;line-height:1.5}
+.box input{width:100%;padding:10px 12px;border:1px solid var(--ln);border-radius:9px;background:var(--sur2)}
+.box .row{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+.box .lst{max-height:300px;overflow:auto;border:1px solid var(--ln);border-radius:10px;margin-top:6px}
+.box .lst div{padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--ln);display:flex;align-items:center;gap:8px}
+.box .lst div:hover{background:var(--hov)}
+.box .lst div:last-child{border-bottom:0}
+.preview{background:#000;padding:0}
+.preview img{max-width:100%;max-height:78vh;display:block;margin:auto}
+.preview .pv-head{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:var(--sur);color:var(--tx)}
+.preview .pv-foot{display:flex;gap:8px;justify-content:flex-end;padding:10px 14px;background:var(--sur)}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%) translateY(120px);background:#111827;color:#fff;padding:11px 16px;border-radius:10px;transition:.25s;opacity:0;z-index:30;max-width:92vw}
+.toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+.toast.err{background:var(--er)}
+.ctx{position:fixed;background:var(--sur);border:1px solid var(--ln);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.2);padding:6px;min-width:190px;display:none;z-index:25}
+.ctx.show{display:block}
+.ctx button{display:flex;width:100%;text-align:left;background:none;border:0;padding:8px 10px;border-radius:7px;cursor:pointer;gap:8px;align-items:center}
+.ctx button:hover{background:var(--hov)}
+.ctx button.danger{color:var(--er)}
+.ctx hr{border:0;border-top:1px solid var(--ln);margin:4px 0}
+.sortable{cursor:pointer}
+.tree{display:flex;flex-direction:column;gap:1px;font-size:13px}
+.tn{display:flex;align-items:center;gap:4px;padding:5px 6px;border-radius:7px;cursor:pointer;min-width:0}
+.tn:hover{background:var(--hov)}
+.tn.cur{background:var(--pri2);color:var(--pri);font-weight:600}
+.tn.dropT{outline:2px dashed var(--pri);outline-offset:-2px}
+.tn .arrow{width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;color:var(--mut);font-size:10px;flex-shrink:0;border-radius:4px}
+.tn .arrow:hover{background:var(--ln)}
+.tn .arrow.leaf{visibility:hidden}
+.tn .lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.tc{margin-left:9px;padding-left:7px;border-left:1px solid var(--ln);display:none}
+.tc.open{display:block}
+.tn .arrow{transition:transform .15s}
+.tn .ic-f{color:var(--pri);font-size:13px;flex-shrink:0}
+@media(max-width:820px){
+  .app{grid-template-columns:1fr}
+  aside{display:none}
+  .search{width:130px}
+  .dt{display:none}
+}
+</style>
+</head>
+<body>
+<div class="app">
+<aside>
+  <div class="brand"><div class="logo">LD</div>LocalDrop</div>
+  <button class="nav on" data-go=""><span class="ic">&#8962;</span>All files</button>
+  <div class="sec">Folders</div>
+  <div class="tree" id="tree"></div>
+  <div class="sec">Appearance</div>
+  <button class="nav" id="bTheme"><span class="ic">&#9789;</span><span id="themeLbl">Dark mode</span></button>
+  <div class="conn"><span class="dot" id="dot"></span><span id="stxt">Connected</span></div>
+</aside>
+
+<main>
+  <div class="top">
+    <div class="nv">
+      <button class="iconbtn" id="bBack" title="Back" disabled>&#8592;</button>
+      <button class="iconbtn" id="bFwd" title="Forward" disabled>&#8594;</button>
+      <button class="iconbtn" id="bUpLvl" title="Up one folder">&#8593;</button>
+    </div>
+    <div class="crumbs" id="crumbs"></div>
+    <input class="search" id="search" placeholder="Search this folder">
+    <div class="seg" id="sizeSeg" title="Display">
+      <button data-v="list">List</button><button data-v="small">Small</button><button data-v="large">Large</button>
+    </div>
+    <button class="btn" id="bNew">New folder</button>
+    <button class="btn pri" id="bUp">Upload</button>
+    <button class="iconbtn" id="bRef" title="Refresh">&#8635;</button>
+    <input type="file" id="picker" multiple hidden>
+  </div>
+  <div class="sel" id="selbar">
+    <span class="cnt" id="selCnt">0 selected</span>
+    <button class="btn" id="sAll">Select all</button>
+    <button class="btn" id="sNone">Clear</button>
+    <button class="btn" id="sCopy">Copy to…</button>
+    <button class="btn" id="sMove">Move to…</button>
+    <button class="btn" id="sDl">Download</button>
+    <button class="btn danger" id="sDel">Delete</button>
+  </div>
+  <div class="uq" id="queue"></div>
+  <div class="zone" id="zone"><div id="view"></div></div>
+</main>
+</div>
+
+<div class="ctx" id="ctx"></div>
+
+<div class="modal" id="mdlInput"><div class="box">
+  <h3 id="mdlInputT">Name</h3>
+  <input id="mdlInputV" maxlength="120">
+  <div class="row"><button class="btn" id="mdlInputC">Cancel</button><button class="btn pri" id="mdlInputOk">OK</button></div>
+</div></div>
+
+<div class="modal" id="mdlPick"><div class="box">
+  <h3 id="mdlPickT">Choose folder</h3>
+  <p id="mdlPickP"></p>
+  <div class="lst" id="mdlPickL"></div>
+  <div class="row"><button class="btn" id="mdlPickC">Cancel</button></div>
+</div></div>
+
+<div class="modal" id="mdlPreview"><div class="box preview" style="max-width:820px;padding:0;overflow:hidden">
+  <div class="pv-head"><strong id="pvName"></strong><span id="pvCount" style="color:var(--mut);font-size:12px;margin-left:8px"></span><button class="iconbtn" id="pvClose" style="margin-left:auto">&#10005;</button></div>
+  <div id="pvBody" style="position:relative"></div>
+  <div class="pv-foot"><button class="btn" id="pvPrev">&#8592; Previous</button><button class="btn" id="pvNext">Next &#8594;</button><a class="btn" id="pvDl" download style="margin-left:auto">Download</a></div>
+</div></div>
+
+<div class="modal" id="mdlPin"><div class="box">
+  <h3>Enter the PIN shown on the phone</h3>
+  <input id="pinV" inputmode="numeric" maxlength="6" placeholder="6-digit PIN">
+  <div class="row"><button class="btn pri" id="pinOk">Unlock</button></div>
+</div></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=n=>n<1024?n+' B':n<1048576?(n/1024).toFixed(1)+' KB':n<1073741824?(n/1048576).toFixed(1)+' MB':(n/1073741824).toFixed(2)+' GB';
+const when=t=>t?new Date(t).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'}):'';
+const token0=new URLSearchParams(location.search).get('token');
+if(token0)localStorage.setItem('ld-token',token0);
+let token=token0||localStorage.getItem('ld-token')||'';
+const q=(path,params)=>{const u=new URL(path,location.origin);Object.entries(params||{}).forEach(([k,v])=>u.searchParams.set(k,v));u.searchParams.set('token',token);return u.toString();};
+const enc=id=>id.split('/').map(encodeURIComponent).join('/');
+const ext=f=>(f.name.includes('.')?f.name.split('.').pop():'').toLowerCase();
+const kind=f=>{if(f.type==='directory')return 'dir';const e=ext(f);if(['jpg','jpeg','png','gif','webp','heic','bmp'].includes(e))return 'img';if(['pdf','doc','docx','txt','xls','xlsx','ppt','pptx','csv','md'].includes(e))return 'doc';if(['mp4','mkv','mov','avi','webm','3gp'].includes(e))return 'vid';if(['zip','rar','7z','tar','gz'].includes(e))return 'arc';return 'file';};
+const isImg=f=>f.type!=='directory'&&kind(f)==='img';
+const label=f=>f.type==='directory'?'DIR':((f.name.includes('.')?f.name.split('.').pop():'FILE').slice(0,4).toUpperCase());
+const prefs={theme:localStorage.getItem('ld-theme')||'light',size:localStorage.getItem('ld-size')||'list'};
+const state={path:'',files:[],filter:'',sel:new Set(),dest:'',hist:[''],hi:0};
+let busy=false; // true while a bulk op is in flight; the 5s poll stands down.
+function applyPrefs(){
+  document.documentElement.classList.toggle('dark',prefs.theme==='dark');
+  $('themeLbl').textContent=prefs.theme==='dark'?'Light mode':'Dark mode';
+  document.querySelectorAll('#sizeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.v===prefs.size));
+}
+$('bTheme').onclick=()=>{prefs.theme=prefs.theme==='dark'?'light':'dark';localStorage.setItem('ld-theme',prefs.theme);applyPrefs();};
+$('sizeSeg').addEventListener('click',e=>{const b=e.target.closest('[data-v]');if(!b)return;prefs.size=b.dataset.v;localStorage.setItem('ld-size',prefs.size);applyPrefs();render();});
+function toast(msg,isErr,ms){const t=$('toast');t.textContent=msg;t.className='toast show'+(isErr?' err':'');clearTimeout(toast._t);toast._t=setTimeout(()=>t.className='toast',ms||3000);}
+function online(ok){$('dot').className='dot'+(ok?'':' off');$('stxt').textContent=ok?'Connected':'Disconnected';}
+async function api(method,path,params,body){
+  const opt={method,headers:{}};
+  if(body!==undefined){opt.headers['Content-Type']='application/json';opt.body=JSON.stringify(body);}
+  const r=await fetch(q(path,params),opt);
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  return r.json().catch(()=>({}));
+}
+async function ensureToken(){
+  if(token){const r=await fetch(q('/api/v1/transfer/files',{path:''}));if(r.ok)return true;}
+  const r=await fetch(location.origin+'/api/v1/unlock');
+  if(r.ok){token=(await r.json()).token;localStorage.setItem('ld-token',token);return true;}
+  return false;
+}
+applyPrefs();
+
+function go(path,push){
+  state.sel.clear();
+  if(push!==false){state.hist=state.hist.slice(0,state.hi+1);state.hist.push(path);state.hi=state.hist.length-1;}
+  state.path=path;load();
+}
+function navBtns(){
+  $('bBack').disabled=state.hi<=0;
+  $('bFwd').disabled=state.hi>=state.hist.length-1;
+  $('bUpLvl').disabled=!state.path;
+}
+$('bBack').onclick=()=>{if(state.hi>0){state.hi--;state.path=state.hist[state.hi];state.sel.clear();load();}};
+$('bFwd').onclick=()=>{if(state.hi<state.hist.length-1){state.hi++;state.path=state.hist[state.hi];state.sel.clear();load();}};
+$('bUpLvl').onclick=()=>{if(state.path){const p=state.path.split('/');p.pop();go(p.join('/'));}};
+document.addEventListener('keydown',e=>{
+  if(e.target.matches('input,textarea'))return;
+  if(e.altKey&&e.key==='ArrowLeft')$('bBack').click();
+  if(e.altKey&&e.key==='ArrowRight')$('bFwd').click();
+  if(e.altKey&&e.key==='ArrowUp')$('bUpLvl').click();
+});
+
+async function load(){
+  try{
+    const ok=await ensureToken();
+    if(!ok){online(true);askPin();return;}
+    const r=await fetch(q('/api/v1/transfer/files',{path:state.path}));
+    if(r.status===401||r.status===403){token='';localStorage.removeItem('ld-token');askPin();return;}
+    if(!r.ok)throw new Error(r.status);
+    state.files=await r.json();
+    const ids=new Set(state.files.map(f=>f.file_id));
+    state.sel=new Set([...state.sel].filter(x=>ids.has(x)));
+    online(true);
+    // Only re-render when the listing actually changed, so polling never disturbs the view.
+    const sig=state.path+'|'+state.files.map(f=>f.file_id+':'+f.modified+':'+f.size).join(',');
+    // Compare names/ids/sizes only; "modified" can jitter and would cause needless redraws.
+    const sig2=state.path+'|'+state.files.map(f=>f.file_id+':'+f.size).join(',');
+    if(sig2!==load.lastSig||!$('view').innerHTML){load.lastSig=sig2;render();}
+    else refreshSel();
+  }catch(e){online(false);}
+}
+function askPin(){$('mdlPin').classList.add('show');$('pinV').focus();}
+$('pinOk').onclick=async()=>{
+  const r=await fetch(location.origin+'/api/v1/unlock?pin='+encodeURIComponent($('pinV').value.trim()));
+  if(!r.ok){toast('Wrong PIN',true);return;}
+  token=(await r.json()).token;localStorage.setItem('ld-token',token);
+  $('mdlPin').classList.remove('show');$('pinV').value='';load();
+};
+$('pinV').addEventListener('keydown',e=>{if(e.key==='Enter')$('pinOk').click();});
+
+function visible(){
+  const t=state.filter.toLowerCase();
+  return state.files.filter(f=>!t||f.name.toLowerCase().includes(t)).sort((a,b)=>{
+    if(a.type!==b.type)return a.type==='directory'?-1:1;
+    return a.name.localeCompare(b.name);
+  });
+}
+function renderCrumbs(){
+  const parts=state.path?state.path.split('/'):[];
+  let acc='';
+  let h='<button data-p="" class="drop">Home</button>';
+  parts.forEach((p,i)=>{acc=acc?acc+'/'+p:p;h+='<span class="sep">/</span><button data-p="'+esc(acc)+'" class="drop'+(i===parts.length-1?' cur':'')+'">'+esc(p)+'</button>';});
+  $('crumbs').innerHTML=h;
+}
+function thumbHtml(f){
+  const k=kind(f);
+  if(isImg(f)){
+    // Server-side downscaled JPEG (small bytes, cached), not the full photo: a
+    // grid of hundreds of pictures must not flood the phone with image requests.
+    return '<div class="thumb img"><img loading="lazy" decoding="async" alt="" src="'+esc(q('/api/v1/thumb',{path:f.file_id,w:360}))+'" onload="this.classList.add(\'done\')" onerror="this.classList.add(\'done\')"></div>';
+  }
+  return '<div class="thumb '+k+'">'+esc(label(f))+'</div>';
+}
+function render(){
+  renderCrumbs();navBtns();
+  const selbar=$('selbar');selbar.classList.toggle('show',state.sel.size>0);
+  $('selCnt').textContent=state.sel.size+' selected';
+  const list=visible();const v=$('view');
+  if(!list.length){v.innerHTML='<div class="empty">'+(state.filter?'No files match your search.':'This folder is empty.<br>Drop files here or press Upload.')+'</div>';return;}
+  if(prefs.size==='list'){
+    v.innerHTML='<table><thead><tr><th style="width:36px"><input type="checkbox" class="chk" id="chkAll"></th><th>Name</th><th class="num">Size</th><th class="dt">Modified</th><th style="width:1%"></th></tr></thead><tbody>'
+      +list.map(f=>{
+        const s=state.sel.has(f.file_id);const isDir=f.type==='directory';
+        return '<tr class="'+(s?'sel':'')+'" data-id="'+esc(f.file_id)+'" data-dir="'+(isDir?1:0)+'" draggable="true">'
+          +'<td><input type="checkbox" class="chk" data-check="'+esc(f.file_id)+'"'+(s?' checked':'')+'></td>'
+          +'<td class="nm"><div class="nmwrap">'+thumbHtml(f)
+          +'<span class="name" '+(isDir?'data-open="'+esc(f.file_id)+'"':'data-prev="'+esc(f.file_id)+'"')+'>'+esc(f.name)+'</span></div></td>'
+          +'<td class="num">'+(isDir?'Folder':fmt(f.size))+'</td>'
+          +'<td class="dt">'+esc(when(f.modified))+'</td>'
+          +'<td class="act">'+(isDir?'':'<button class="ibtn" title="Download" data-dl="'+esc(f.file_id)+'">&#8595;</button>')
+          +'<button class="ibtn" title="More" data-more="'+esc(f.file_id)+'">&#8943;</button>'
+          +'<button class="ibtn del" title="Delete" data-del="'+esc(f.file_id)+'">&#128465;</button></td></tr>';
+      }).join('')+'</tbody></table>';
+    const all=$('chkAll');
+    if(all){all.checked=list.length>0&&list.every(f=>state.sel.has(f.file_id));all.onchange=e=>{list.forEach(f=>e.target.checked?state.sel.add(f.file_id):state.sel.delete(f.file_id));render();};}
+  }else{
+    v.innerHTML='<div class="grid '+prefs.size+'">'+list.map(f=>{
+      const s=state.sel.has(f.file_id);const isDir=f.type==='directory';
+      return '<div class="gcard'+(s?' sel':'')+'" data-id="'+esc(f.file_id)+'" data-dir="'+(isDir?1:0)+'" draggable="true">'
+        +'<input type="checkbox" class="chk" data-check="'+esc(f.file_id)+'"'+(s?' checked':'')+'>'
+        +thumbHtml(f)
+        +'<div class="name" '+(isDir?'data-open="'+esc(f.file_id)+'"':'data-prev="'+esc(f.file_id)+'"')+'>'+esc(f.name)+'</div>'
+        +'<div class="sub">'+(isDir?'Folder':fmt(f.size))+'</div></div>';
+    }).join('')+'</div>';
+  }
+}
+
+function toggle(id,on){on?state.sel.add(id):state.sel.delete(id);}
+// Update selection visuals in place. Full re-render would reload thumbnails and make names flicker.
+function refreshSel(){
+  document.querySelectorAll('#view [data-id]').forEach(el=>{
+    const on=state.sel.has(el.dataset.id);
+    el.classList.toggle('sel',on);
+    const c=el.querySelector('[data-check]');if(c)c.checked=on;
+  });
+  const all=$('chkAll');
+  if(all){const vis=visible();all.checked=vis.length>0&&vis.every(f=>state.sel.has(f.file_id));}
+  $('selbar').classList.toggle('show',state.sel.size>0);
+  $('selCnt').textContent=state.sel.size+' selected';
+}
+$('view').addEventListener('change',e=>{
+  const c=e.target.closest('[data-check]');if(!c)return;
+  toggle(c.dataset.check,c.checked);refreshSel();
+});
+$('view').addEventListener('click',e=>{
+  const open=e.target.closest('[data-open]');
+  if(open){go(open.dataset.open);return;}
+  const prev=e.target.closest('[data-prev]');
+  if(prev){const f=state.files.find(x=>x.file_id===prev.dataset.prev);if(f)openPreview(f);return;}
+  const dl=e.target.closest('[data-dl]');if(dl){download(dl.dataset.dl);return;}
+  const del=e.target.closest('[data-del]');if(del){deleteIds([del.dataset.del],e);return;}
+  const more=e.target.closest('[data-more]');if(more){openCtx(more.dataset.more,e.clientX,e.clientY);return;}
+  const row=e.target.closest('[data-id]');
+  if(row&&!e.target.closest('button,input,img')){const id=row.dataset.id;toggle(id,!state.sel.has(id));refreshSel();}
+});
+$('view').addEventListener('contextmenu',e=>{
+  const row=e.target.closest('[data-id]');if(!row)return;
+  e.preventDefault();openCtx(row.dataset.id,e.clientX,e.clientY);
+});
+$('crumbs').addEventListener('click',e=>{const b=e.target.closest('[data-p]');if(b)go(b.dataset.p);});
+$('search').addEventListener('input',e=>{state.filter=e.target.value;render();});
+$('bRef').onclick=load;
+$('bUp').onclick=()=>$('picker').click();
+$('picker').onchange=e=>{upload(e.target.files);e.target.value='';};
+$('sAll').onclick=()=>{visible().forEach(f=>state.sel.add(f.file_id));refreshSel();};
+$('sNone').onclick=()=>{state.sel.clear();refreshSel();};
+$('sDel').onclick=e=>deleteIds([...state.sel],e);
+// One file downloads directly. Many files are packed into ZIPs of 100 on the phone,
+// so 1000 photos become 10 downloads instead of 1000.
+// Smaller batches finish sooner and fail less; each ZIP is saved as soon as it is ready.
+const ZIP_BATCH=25;
+$('sDl').onclick=async()=>{
+  const fs=state.files.filter(f=>state.sel.has(f.file_id)&&f.type!=='directory');
+  if(!fs.length){toast('Select files (folders cannot be downloaded yet)',true);return;}
+  if(fs.length===1){download(fs[0].file_id);return;}
+  const total=Math.ceil(fs.length/ZIP_BATCH);
+  for(let b=0;b<total;b++){
+    const batch=fs.slice(b*ZIP_BATCH,(b+1)*ZIP_BATCH);
+    const from=b*ZIP_BATCH+1,to=Math.min(fs.length,(b+1)*ZIP_BATCH);
+    toast('Packing ZIP '+(b+1)+' of '+total+' (files '+from+'–'+to+' of '+fs.length+')…',false,15000);
+    try{
+      const r=await fetch(q('/api/v1/transfer/zip'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paths:batch.map(f=>f.file_id)})});
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      const blob=await r.blob();
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');
+      a.href=url;a.download='localdrop-'+(b+1)+'-of-'+total+'.zip';a.style.display='none';
+      document.body.appendChild(a);a.click();a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),10000);
+      // Pause between ZIPs so the browser can finish each save before the next one starts.
+      if(b<total-1)await new Promise(res=>setTimeout(res,1500));
+    }catch(e){toast('ZIP '+(b+1)+' failed: '+(e.message||'error'),true);return;}
+  }
+  toast('Downloaded '+fs.length+' file'+(fs.length===1?'':'s')+' in '+total+' ZIP'+(total===1?'':'s'));
+};
+$('sMove').onclick=()=>pickFolder('Move to folder',moveIds);
+$('sCopy').onclick=()=>pickFolder('Copy to folder',copyIds);
+
+// One hidden link is reused for every download, so no extra tabs open.
+// Fetch the file and save it from a blob URL. Navigating to the file URL opens a new tab in some browsers.
+async function download(id){
+  const f=state.files.find(x=>x.file_id===id);
+  const name=f?f.name:id.split('/').pop();
+  try{
+    const r=await fetch(q('/api/v1/files/'+enc(id)));
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const blob=await r.blob();
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;a.download=name;a.style.display='none';
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),4000);
+  }catch(e){toast('Download failed: '+name,true);}
+}
+// Preview walks through the images in the open folder, in the same order as the list.
+let pvList=[],pvIdx=0;
+function showPreview(){
+  const f=pvList[pvIdx];if(!f)return;
+  const url=q('/api/v1/files/'+enc(f.file_id));
+  $('pvName').textContent=f.name;
+  $('pvCount').textContent=(pvIdx+1)+' / '+pvList.length;
+  $('pvDl').href=url;
+  $('pvBody').innerHTML='<img src="'+esc(url)+'" alt="">';
+  $('pvPrev').disabled=pvIdx<=0;
+  $('pvNext').disabled=pvIdx>=pvList.length-1;
+}
+function openPreview(f){
+  pvList=visible().filter(isImg);
+  pvIdx=Math.max(0,pvList.findIndex(x=>x.file_id===f.file_id));
+  if(!isImg(f)){
+    $('pvName').textContent=f.name;$('pvCount').textContent='';
+    $('pvDl').href=q('/api/v1/files/'+enc(f.file_id));
+    $('pvBody').innerHTML='<div class="empty">No preview for this file type. Use Download.</div>';
+    $('pvPrev').disabled=true;$('pvNext').disabled=true;
+    $('mdlPreview').classList.add('show');return;
+  }
+  showPreview();
+  $('mdlPreview').classList.add('show');
+}
+$('pvPrev').onclick=()=>{if(pvIdx>0){pvIdx--;showPreview();}};
+$('pvNext').onclick=()=>{if(pvIdx<pvList.length-1){pvIdx++;showPreview();}};
+$('pvClose').onclick=()=>{$('mdlPreview').classList.remove('show');$('pvBody').innerHTML='';};
+$('mdlPreview').addEventListener('click',e=>{if(e.target.id==='mdlPreview'){$('pvClose').click();}});
+document.addEventListener('keydown',e=>{
+  const pvOpen=$('mdlPreview').classList.contains('show');
+  if(pvOpen&&e.key==='ArrowRight')$('pvNext').click();
+  if(pvOpen&&e.key==='ArrowLeft')$('pvPrev').click();
+  if(e.key==='Escape'){$('pvClose').click();$('mdlPick').classList.remove('show');$('mdlInput').classList.remove('show');$('ctx').classList.remove('show');}
+});
+
+async function deleteIds(ids,event){
+  if(!ids.length)return;
+  if(!confirm('Delete '+(ids.length===1?'this item':ids.length+' items')+'? This cannot be undone.'))return;
+  const btn=event&&event.target?event.target.closest('button'):null;const old=btn?btn.textContent:null;
+  if(btn){btn.disabled=true;btn.textContent='Deleting…';}
+  busy=true;
+  toast('Deleting '+ids.length+' item'+(ids.length===1?'':'s')+'…');
+  try{
+    const j=await api('POST','/api/v1/transfer/delete-many',{},{paths:ids});
+    ids.forEach(x=>state.sel.delete(x));
+    toast('Deleted '+j.deleted+' item'+(j.deleted===1?'':'s'));load();
+  }catch(e){toast('Could not delete',true);}
+  finally{if(btn){btn.disabled=false;btn.textContent=old;}busy=false;}
+}
+async function moveIds(ids){
+  if(!ids.length){toast('Nothing selected',true);return;}
+  busy=true;
+  try{
+    const j=await api('POST','/api/v1/transfer/move',{},{paths:ids,dest:state.dest});
+    ids.forEach(x=>state.sel.delete(x));
+    toast(j.moved?('Moved '+j.moved+' item'+(j.moved===1?'':'s')):'Nothing moved (already there or name exists)',!j.moved);
+    load();
+  }catch(e){toast('Could not move: '+(e.message||'error'),true);}
+  finally{busy=false;}
+}
+async function copyIds(ids){
+  if(!ids.length){toast('Nothing selected',true);return;}
+  busy=true;
+  try{
+    const j=await api('POST','/api/v1/transfer/copy',{},{paths:ids,dest:state.dest});
+    ids.forEach(x=>state.sel.delete(x));
+    toast(j.copied?('Copied '+j.copied+' item'+(j.copied===1?'':'s')):'Nothing copied (already there or name exists)',!j.copied);
+    load();
+  }catch(e){toast('Could not copy: '+(e.message||'error'),true);}
+  finally{busy=false;}
+}
+async function listDirs(path,depth){
+  const r=await fetch(q('/api/v1/transfer/files',{path}));if(!r.ok)return [];
+  const items=await r.json();let out=[];
+  for(const f of items.filter(x=>x.type==='directory')){
+    out.push({id:f.file_id,name:f.name,depth});
+    if(depth<4)out=out.concat(await listDirs(f.file_id,depth+1));
+  }
+  return out;
+}
+async function pickFolder(title,run){
+  const targets=[...state.sel];
+  if(!targets.length){toast('Select items first',true);return;}
+  $('mdlPickT').textContent=title;
+  $('mdlPickP').textContent=targets.length+' item(s)';
+  let dirs=[{id:'',name:'Home',depth:0}];
+  try{const r=await fetch(q('/api/v1/transfer/tree'));if(r.ok)dirs=dirs.concat(await r.json());}catch(e){}
+  $('mdlPickL').innerHTML=dirs.map(d=>'<div data-dest="'+esc(d.id)+'" style="padding-left:'+(12+d.depth*18)+'px">&#128193; '+esc(d.name)+'</div>').join('');
+  $('mdlPickL').onclick=e=>{const it=e.target.closest('[data-dest]');if(!it)return;state.dest=it.dataset.dest;$('mdlPick').classList.remove('show');run(targets);};
+  $('mdlPick').classList.add('show');
+}
+$('mdlPickC').onclick=()=>$('mdlPick').classList.remove('show');
+
+function openCtx(id,x,y){
+  const f=state.files.find(v=>v.file_id===id);if(!f)return;
+  const isDir=f.type==='directory';
+  if(!state.sel.has(id)){state.sel.clear();state.sel.add(id);refreshSel();}
+  const n=state.sel.size;
+  const items=[];
+  if(!isDir&&n===1)items.push(['Preview','pv']);
+  if(!isDir&&n===1)items.push(['Download','dl']);
+  if(n===1)items.push(['Rename','ren']);
+  items.push(['Copy to...','copy'],['Move to...','move']);
+  items.push(['---']);
+  items.push([n>1?'Delete '+n+' items':'Delete','del',true]);
+  const c=$('ctx');
+  c.innerHTML=items.map(it=>it[0]==='---'?'<hr>':'<button data-a="'+it[1]+'"'+(it[2]?' class="danger"':'')+'>'+esc(it[0])+'</button>').join('');
+  c.style.left=Math.min(x,window.innerWidth-200)+'px';
+  c.style.top=Math.min(y,window.innerHeight-260)+'px';
+  c.classList.add('show');
+  c.onclick=e=>{
+    const b=e.target.closest('[data-a]');if(!b)return;
+    c.classList.remove('show');
+    const ids=[...state.sel];const a=b.dataset.a;
+    if(a==='pv')openPreview(f);
+    if(a==='dl')download(id);
+    if(a==='ren')rename(f);
+    if(a==='copy')pickFolder('Copy to folder',copyIds);
+    if(a==='move')pickFolder('Move to folder',moveIds);
+    if(a==='del')deleteIds(ids,undefined);
+  };
+}
+document.addEventListener('click',e=>{if(!e.target.closest('#ctx')&&!e.target.closest('[data-more]'))$('ctx').classList.remove('show');});
+function askText(title,value){
+  return new Promise(res=>{
+    $('mdlInputT').textContent=title;$('mdlInputV').value=value||'';
+    $('mdlInput').classList.add('show');$('mdlInputV').focus();
+    const done=v=>{$('mdlInput').classList.remove('show');res(v);};
+    $('mdlInputOk').onclick=()=>done($('mdlInputV').value.trim());
+    $('mdlInputC').onclick=()=>done(null);
+    $('mdlInputV').onkeydown=e=>{if(e.key==='Enter')done($('mdlInputV').value.trim());if(e.key==='Escape')done(null);};
+  });
+}
+async function rename(f){
+  const name=await askText('Rename',f.name);
+  if(!name||name===f.name)return;
+  try{await api('POST','/api/v1/transfer/rename',{},{path:f.file_id,name});toast('Renamed');load();}
+  catch(e){toast('Could not rename (name may already exist)',true);}
+}
+$('bNew').onclick=async()=>{
+  const name=await askText('New folder','');
+  if(!name)return;
+  const path=state.path?state.path+'/'+name:name;
+  try{await api('POST','/api/v1/transfer/folder',{},{path});toast('Folder created');load();}
+  catch(e){toast('Could not create folder',true);}
+};
+
+let dragIds=[];
+$('view').addEventListener('dragstart',e=>{
+  const row=e.target.closest('[data-id]');if(!row)return;
+  const id=row.dataset.id;
+  dragIds=state.sel.has(id)?[...state.sel]:[id];
+  e.dataTransfer.setData('text/plain',dragIds.join('\n'));
+  e.dataTransfer.effectAllowed='move';
+});
+$('view').addEventListener('dragover',e=>{
+  const t=e.target.closest('[data-dir="1"]');
+  if(t&&dragIds.length){e.preventDefault();t.classList.add('dropT');}
+});
+$('view').addEventListener('dragleave',e=>{const t=e.target.closest('[data-dir]');if(t)t.classList.remove('dropT');});
+$('view').addEventListener('drop',e=>{
+  const t=e.target.closest('[data-dir="1"]');
+  if(!t||!dragIds.length)return;
+  e.preventDefault();e.stopPropagation();t.classList.remove('dropT');
+  const dest=t.dataset.id;const ids=dragIds.filter(x=>x!==dest);dragIds=[];
+  state.dest=dest;moveIds(ids);
+});
+$('view').addEventListener('dragend',()=>{dragIds=[];document.querySelectorAll('.dropT').forEach(x=>x.classList.remove('dropT'));});
+$('crumbs').addEventListener('dragover',e=>{const b=e.target.closest('[data-p]');if(b&&dragIds.length){e.preventDefault();b.classList.add('dropHover');}});
+$('crumbs').addEventListener('dragleave',e=>{const b=e.target.closest('[data-p]');if(b)b.classList.remove('dropHover');});
+$('crumbs').addEventListener('drop',e=>{
+  const b=e.target.closest('[data-p]');if(!b||!dragIds.length)return;
+  e.preventDefault();b.classList.remove('dropHover');
+  const ids=dragIds;dragIds=[];state.dest=b.dataset.p;moveIds(ids);
+});
+
+const zone=$('zone');
+zone.addEventListener('dragenter',e=>{if(!dragIds.length&&e.dataTransfer.types.includes('Files')){e.preventDefault();zone.classList.add('over');}});
+zone.addEventListener('dragover',e=>{if(!dragIds.length&&e.dataTransfer.types.includes('Files')){e.preventDefault();zone.classList.add('over');}});
+zone.addEventListener('dragleave',e=>{if(!zone.contains(e.relatedTarget))zone.classList.remove('over');});
+zone.addEventListener('drop',e=>{
+  zone.classList.remove('over');
+  if(dragIds.length)return;
+  e.preventDefault();
+  upload(e.dataTransfer.files);
+});
+
+function uploadOne(file,row){
+  return new Promise(resolve=>{
+    const xhr=new XMLHttpRequest();
+    const fd=new FormData();fd.append('file',file,file.name);
+    xhr.open('POST',q('/api/v1/transfer/upload',{path:state.path}));
+    xhr.upload.onprogress=e=>{if(e.lengthComputable)row.bar.style.width=(e.loaded/e.total*100).toFixed(1)+'%';};
+    xhr.onload=()=>{const ok=xhr.status>=200&&xhr.status<300;row.lbl.textContent=ok?'Done':'Failed';row.lbl.style.color=ok?'var(--ok)':'var(--er)';resolve(ok);};
+    xhr.onerror=()=>{row.lbl.textContent='Failed';resolve(false);};
+    xhr.send(fd);
+  });
+}
+async function upload(files){
+  const list=Array.from(files);if(!list.length)return;
+  let ok=0;
+  for(const f of list){
+    if(f.size>100*1024*1024){toast(f.name+' is larger than 100 MB',true);continue;}
+    const w=document.createElement('div');w.className='up';
+    w.innerHTML='<div class="r"><span>'+esc(f.name)+'</span><span class="lbl">Sending...</span></div><div class="bt"><div class="bf"></div></div>';
+    $('queue').prepend(w);
+    const row={bar:w.querySelector('.bf'),lbl:w.querySelector('.lbl')};
+    if(await uploadOne(f,row))ok++;
+  }
+  if(ok)toast(ok+' file'+(ok>1?'s':'')+' uploaded');
+  load();
+}
+
+// Sidebar tree: every folder on the phone, loaded from the server when first opened.
+const treeOpen=new Set();
+async function buildTree(){
+  const root=$('tree');
+  root.innerHTML='';
+  root.appendChild(await treeNode({id:'',name:'Phone storage',depth:0},true));
+  markTree();
+}
+async function treeNode(d,isRoot){
+  const wrap=document.createElement('div');
+  const row=document.createElement('div');
+  row.className='tn';row.dataset.path=d.id;
+  row.innerHTML='<span class="arrow" data-arrow="'+esc(d.id)+'">&#9656;</span><span class="ic-f">&#128193;</span><span class="lbl">'+esc(d.name)+'</span>';
+  const kids=document.createElement('div');kids.className='tc';kids.dataset.kids=d.id;
+  wrap.appendChild(row);wrap.appendChild(kids);
+  if(isRoot){treeOpen.add('');kids.classList.add('open');row.querySelector('.arrow').innerHTML='&#9662;';}
+  await fillKids(kids,d.id,d.depth);
+  return wrap;
+}
+async function fillKids(container,path,depth){
+  let items=[];
+  try{const r=await fetch(q('/api/v1/transfer/files',{path}));if(r.ok)items=(await r.json()).filter(x=>x.type==='directory');}catch(e){}
+  container.innerHTML='';
+  if(!items.length){container.dataset.empty='1';}
+  for(const f of items){
+    const sub=document.createElement('div');
+    const row=document.createElement('div');
+    row.className='tn';row.dataset.path=f.file_id;
+    row.innerHTML='<span class="arrow'+(f.hasSub===false?' leaf':'')+'" data-arrow="'+esc(f.file_id)+'">&#9656;</span><span class="ic-f">&#128193;</span><span class="lbl">'+esc(f.name)+'</span>';
+    const kids=document.createElement('div');kids.className='tc';kids.dataset.kids=f.file_id;
+    sub.appendChild(row);sub.appendChild(kids);
+    container.appendChild(sub);
+    if(treeOpen.has(f.file_id)){kids.classList.add('open');row.querySelector('.arrow').innerHTML='&#9662;';await fillKids(kids,f.file_id,depth+1);}
+  }
+}
+function markTree(){
+  document.querySelectorAll('#tree .tn').forEach(r=>r.classList.toggle('cur',r.dataset.path===state.path));
+}
+$('tree').addEventListener('click',async e=>{
+  const arrow=e.target.closest('[data-arrow]');
+  if(arrow){
+    e.stopPropagation();
+    const id=arrow.dataset.arrow;
+    const kids=document.querySelector('#tree [data-kids="'+CSS.escape(id)+'"]');
+    if(!kids)return;
+    if(kids.classList.contains('open')){kids.classList.remove('open');treeOpen.delete(id);arrow.innerHTML='&#9656;';}
+    else{
+      treeOpen.add(id);kids.classList.add('open');arrow.innerHTML='&#9662;';
+      await fillKids(kids,id,id.split('/').length);
+    }
+    return;
+  }
+  const row=e.target.closest('.tn');
+  if(row){go(row.dataset.path);}
+});
+// Keep the tree in sync whenever the open folder changes.
+const _go=go;
+go=function(path,push){_go(path,push);setTimeout(()=>{markTree();},0);};
+document.querySelector('aside .nav[data-go=""]').onclick=()=>go('');
+
+setInterval(()=>{
+  // Skip a poll cycle while thumbnails are still streaming or a bulk op is in
+  // flight: re-rendering mid-flight used to restart hundreds of image requests
+  // at once and overwhelm the phone during big selections.
+  if(document.querySelector('.modal.show')||$('ctx').classList.contains('show')||document.querySelector('.dropT'))return;
+  if(busy)return;
+  const pending=document.querySelectorAll('#view img[src]').length-document.querySelectorAll('#view img[src].done').length;
+  if(pending>0)return;
+  load();
+},5000);
+buildTree();
+load();
+
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,31 @@
+# Gradle
+.gradle/
+build/
+app/build/
+app/.cxx/
+
+# Kotlin
+.kotlin/
+
+# Tauri / Rust
+desktop/target/
+
+# Node.js
+node_modules/
+desktop/frontend/node_modules/
+desktop/frontend/dist/
+
+# Gradle wrapper jar
+*.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
