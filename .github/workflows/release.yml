@@ -23,6 +23,8 @@ jobs:
         working-directory: desktop/frontend
       - run: npm test
         working-directory: desktop/frontend
+      - run: npm run build
+        working-directory: desktop/frontend
       - run: cargo test --locked
         working-directory: desktop
       - run: node frontend/node_modules/@tauri-apps/cli/tauri.js build --ci
