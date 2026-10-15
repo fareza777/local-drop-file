@@ -44,11 +44,26 @@ fun HomeScreen(
     context: Context,
     store: LocalDropStore,
     onShowGuide: (TransferMode) -> Unit,
-    onOpenSettings: () -> Unit
+    onOpenSettings: () -> Unit,
+    initialMode: TransferMode? = null
 ) {
-    var selectedMode by remember { mutableStateOf(TransferMode.entries.firstOrNull { it.name == store.settings.lastMode } ?: TransferMode.BROWSER) }
+    var selectedMode by remember { mutableStateOf(initialMode ?: TransferMode.entries.firstOrNull { it.name == store.settings.lastMode } ?: TransferMode.BROWSER) }
     val serverState by TransferServerService.state.collectAsState()
     val accessPin by TransferServerService.accessPin.collectAsState()
+    var storageMessage by remember { mutableStateOf("") }
+    val storagePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        if (result.values.all { it }) TransferServerService.start(context, selectedMode.displayName)
+        else storageMessage = "Allow storage access before starting Browser Share. Push to PC works with selected files."
+    }
+    fun startSharing() {
+        if (android.os.Build.VERSION.SDK_INT >= 30 && !android.os.Environment.isExternalStorageManager()) {
+            storageMessage = "Allow All files access, return here, then tap Start sharing. This lets the browser browse your shared phone storage."
+            try { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, android.net.Uri.parse("package:${context.packageName}"))) }
+            catch (_: Exception) { storageMessage = "Enable All files access for LocalDrop in Android Settings." }
+        } else if (android.os.Build.VERSION.SDK_INT < 30 && androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_EXTERNAL_STORAGE) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            storagePermission.launch(arrayOf(android.Manifest.permission.READ_EXTERNAL_STORAGE, android.Manifest.permission.WRITE_EXTERNAL_STORAGE))
+        } else { storageMessage = ""; TransferServerService.start(context, selectedMode.displayName) }
+    }
 
     LaunchedEffect(selectedMode) {
         store.settings = store.settings.copy(lastMode = selectedMode.name)
@@ -64,6 +79,7 @@ fun HomeScreen(
         HeaderSection(serverState.running)
 
         ModeSelector(selectedMode) { selectedMode = it }
+        if (storageMessage.isNotEmpty()) InfoRow(Icons.Default.Info, storageMessage, MaterialTheme.colorScheme.primary)
 
         AnimatedContent(
             targetState = selectedMode,
@@ -84,7 +100,7 @@ fun HomeScreen(
                     serverToken = serverState.token,
                     accessPin = accessPin,
                     error = serverState.error,
-                    onStart = { TransferServerService.start(context, mode.displayName) },
+                    onStart = { startSharing() },
                     onStop = { TransferServerService.stop(context) },
                     onShowGuide = { onShowGuide(mode) }
                 )
@@ -100,12 +116,12 @@ private fun HeaderSection(running: Boolean) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
-                text = "Transfer Files",
+                text = "Move files, simply.",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "Pick a mode, then start.",
+                text = "Choose where your files go.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -165,7 +181,7 @@ private fun ModeTab(
     modifier: Modifier = Modifier
 ) {
     val bg = if (selected) MaterialTheme.colorScheme.surface else Color.Transparent
-    val content = if (selected) mode.color else MaterialTheme.colorScheme.onSurfaceVariant
+    val content = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
     Surface(
         modifier = modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick),
         color = bg,
@@ -179,8 +195,8 @@ private fun ModeTab(
         ) {
             Icon(mode.icon, contentDescription = null, modifier = Modifier.size(22.dp), tint = content)
             Text(
-                text = mode.displayName,
-                style = MaterialTheme.typography.labelMedium,
+                text = when (mode) { TransferMode.BROWSER -> "Browser"; TransferMode.PUSH -> "Send to PC"; TransferMode.REMOTE -> "Remote" },
+                style = MaterialTheme.typography.labelLarge,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                 color = content,
                 textAlign = TextAlign.Center,
@@ -206,7 +222,7 @@ private fun ModeCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -244,7 +260,7 @@ private fun ModeCard(
                     Icon(if (isRunning) Icons.Default.Stop else Icons.Default.PlayArrow, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        if (isRunning) "Stop" else "Start ${mode.displayName}",
+                        if (isRunning) "Stop sharing" else "Start sharing",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -253,10 +269,9 @@ private fun ModeCard(
                 InfoRow(Icons.Default.Construction, "Coming soon in this build. Follow the guide below to set it up.", Color(0xFFE0703A))
             }
 
-            OutlinedButton(
+            TextButton(
                 onClick = onShowGuide,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp)
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Icon(Icons.Default.MenuBook, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
@@ -271,20 +286,21 @@ private fun ServerInfo(shortUrl: String, fullUrl: String, accessPin: String?) {
     val qr = remember(fullUrl) { qrBitmap(fullUrl, 360) }
     val clipboard = LocalClipboardManager.current
     Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
-        Column(
+        Row(
             modifier = Modifier.padding(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             if (qr != null) {
                 Surface(shape = RoundedCornerShape(12.dp), color = Color.White) {
                     Image(
                         bitmap = qr.asImageBitmap(),
                         contentDescription = "QR code for $shortUrl",
-                        modifier = Modifier.size(128.dp).padding(8.dp)
+                        modifier = Modifier.size(112.dp).padding(8.dp)
                     )
                 }
             }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(shortUrl, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
             if (accessPin != null) {
                 Text("PIN $accessPin", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
@@ -298,6 +314,7 @@ private fun ServerInfo(shortUrl: String, fullUrl: String, accessPin: String?) {
                 Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
                 Text("Copy link", style = MaterialTheme.typography.labelLarge)
+            }
             }
         }
     }
@@ -329,9 +346,9 @@ private fun SecurityBanner(onOpenSettings: () -> Unit) {
         ) {
             Icon(Icons.Default.Shield, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
             Column(modifier = Modifier.weight(1f)) {
-                Text("No cloud. No accounts. No servers.", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                Text("Your devices. Your network.", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSecondaryContainer)
                 Text(
-                    "Files move directly between your devices, end-to-end encrypted. Tap to review security settings.",
+                    "Local HTTP is not encrypted. Use trusted Wi-Fi or a secure VPN. Review access settings →",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSecondaryContainer
                 )
@@ -383,7 +400,7 @@ private fun PushCard(context: Context, store: LocalDropStore, onShowGuide: () ->
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -432,10 +449,11 @@ private fun PushCard(context: Context, store: LocalDropStore, onShowGuide: () ->
                     value = address,
                     onValueChange = { address = it },
                     label = { Text("PC receiver address") },
-                    placeholder = { Text("http://100.x.y.z:42198?t=…") },
+                    placeholder = { Text("http://192.168.1.8:42198?t=…") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                    supportingText = { Text("Start “Receive” on LocalDrop Desktop, then copy its address here.") }
+                    isError = address.isNotBlank() && !com.localdrop.app.ui.settings.validReceiverAddress(address),
+                    supportingText = { Text(if (address.isNotBlank() && !com.localdrop.app.ui.settings.validReceiverAddress(address)) "Paste the full receive link, including ?t= and its token." else "Desktop → Receive → Start receiving → Copy link.") }
                 )
 
                 OutlinedButton(
@@ -454,19 +472,18 @@ private fun PushCard(context: Context, store: LocalDropStore, onShowGuide: () ->
                     },
                     modifier = Modifier.fillMaxWidth().height(48.dp),
                     shape = RoundedCornerShape(14.dp),
-                    enabled = address.isNotBlank() && picked.isNotEmpty(),
+                    enabled = com.localdrop.app.ui.settings.validReceiverAddress(address) && picked.isNotEmpty(),
                     colors = ButtonDefaults.buttonColors(containerColor = mode.color)
                 ) {
                     Icon(mode.icon, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text("Push to PC", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Send to PC", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
 
-            OutlinedButton(
+            TextButton(
                 onClick = onShowGuide,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp)
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Icon(Icons.Default.MenuBook, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))

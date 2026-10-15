@@ -74,7 +74,8 @@ pub fn send_file(base: &str, token: &str, path: &str, transfer_id: Option<&str>,
     if size == 0 { return Err("empty files are not supported by the current Android chunk protocol".into()); }
 
     let mut hasher = Sha256::new();
-    let mut scan = [0u8; CHUNK_SIZE];
+    // The Windows UI thread has a small stack; keep the 1 MiB hashing buffer on the heap.
+    let mut scan = vec![0u8; CHUNK_SIZE];
     loop {
         let n = f.read(&mut scan).map_err(|e| e.to_string())?;
         if n == 0 { break; }
@@ -163,3 +164,38 @@ pub fn socket_addr(base: &str) -> Option<SocketAddr> { base.parse().ok() }
 
 // Frontend bridge shapes: discover({address?}), pair({base,fingerprint,deviceId,pin?}),
 // listFiles({base,token}), sendFile({base,token,path,transferId?}), receiveFile({base,token,fileId,destination}).
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::TcpListener;
+    use std::sync::atomic::AtomicBool;
+    #[test]
+    fn upload_works_on_a_small_windows_sized_stack() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = format!("http://{}", listener.local_addr().unwrap());
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream.set_read_timeout(Some(std::time::Duration::from_secs(5))).unwrap();
+            let mut headers = Vec::new();
+            while !headers.ends_with(b"\r\n\r\n") {
+                let mut byte = [0u8; 1]; stream.read_exact(&mut byte).unwrap(); headers.push(byte[0]);
+            }
+            let text = String::from_utf8(headers).unwrap();
+            let length: usize = text.lines().find_map(|line| line.to_ascii_lowercase().strip_prefix("content-length:").map(|n| n.trim().parse().unwrap())).unwrap();
+            let mut bytes = vec![0; length]; stream.read_exact(&mut bytes).unwrap();
+            assert_eq!(bytes, b"small-stack upload");
+            let body = br#"{"complete":true}"#;
+            write!(stream, "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len()).unwrap();
+            stream.write_all(body).unwrap();
+        });
+        let file = std::env::temp_dir().join(format!("localdrop-small-stack-{}.txt", rand::random::<u64>()));
+        std::fs::write(&file, b"small-stack upload").unwrap();
+        let upload_path = file.clone();
+        let result = std::thread::Builder::new().stack_size(512 * 1024).spawn(move || {
+            send_file(&address, "test-token", upload_path.to_str().unwrap(), Some("test"), None, &AtomicBool::new(false))
+        }).unwrap().join().unwrap();
+        std::fs::remove_file(file).unwrap(); server.join().unwrap();
+        assert_eq!(result.unwrap()["complete"], true);
+    }
+}

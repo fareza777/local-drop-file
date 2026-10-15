@@ -1,9 +1,9 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "LocalDrop Desktop",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "identifier": "com.localdrop.desktop",
-  "build": { "frontendDist": "frontend/dist" },
-  "app": { "windows": [{ "title": "LocalDrop Desktop", "width": 960, "height": 720 }] },
-  "bundle": { "active": true, "targets": "all", "icon": ["icons/icon.ico"] }
+  "build": { "beforeBuildCommand": { "script": "npm run build", "cwd": "frontend" }, "frontendDist": "frontend/dist" },
+  "app": { "windows": [{ "title": "LocalDrop Desktop", "width": 1180, "height": 780, "minWidth": 860, "minHeight": 600 }] },
+  "bundle": { "active": true, "targets": ["nsis", "msi"], "shortDescription": "Transfer files between Android and Windows on your own network", "windows": { "nsis": { "installMode": "currentUser" }, "webviewInstallMode": { "type": "downloadBootstrapper", "silent": true } }, "icon": ["icons/icon.ico"] }
 }

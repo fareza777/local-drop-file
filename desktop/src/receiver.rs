@@ -14,6 +14,7 @@ pub const CHUNK_SIZE: usize = 1024 * 1024;
 
 /// Live snapshot of the receiver shown in the desktop UI.
 #[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReceiverInfo {
     pub running: bool,
     pub address: String,
@@ -41,6 +42,7 @@ pub struct Receiver {
     session: Arc<Mutex<Session>>,
     /// Kept so stop() can call the official graceful-shutdown unblock().
     server: Mutex<Option<Arc<Server>>>,
+    worker: Mutex<Option<std::thread::JoinHandle<()>>>,
 }
 
 struct Inner {
@@ -65,6 +67,7 @@ impl Receiver {
             }),
             session: Arc::new(Mutex::new(Session::default())),
             server: Mutex::new(None),
+            worker: Mutex::new(None),
         }
     }
 
@@ -113,15 +116,19 @@ impl Receiver {
         let dest_for_serve = dest.clone();
         let token_for_serve = token.clone();
         let session_for_serve = self.session.clone();
-        std::thread::spawn(move || serve(app, serve_server, dest_for_serve, token_for_serve, session_for_serve));
+        *self.worker.lock().unwrap() = Some(std::thread::spawn(move || serve(app, serve_server, dest_for_serve, token_for_serve, session_for_serve)));
 
         Ok(self.info())
     }
 
     pub fn stop(&self) {
-        // Official graceful shutdown: unblock() ends incoming_requests().
-        if let Some(s) = self.server.lock().unwrap().take() {
-            s.unblock();
+        let port = self.inner.lock().unwrap().port;
+        if let Some(s) = self.server.lock().unwrap().take() { s.unblock(); }
+        if let Some(worker) = self.worker.lock().unwrap().take() { let _ = worker.join(); }
+        // tiny_http drops a listener bound to 0.0.0.0 by connecting to that address.
+        // Windows may reject that wake-up; loopback explicitly releases the accept thread.
+        if port != 0 {
+            let _ = std::net::TcpStream::connect_timeout(&([127, 0, 0, 1], port).into(), std::time::Duration::from_millis(100));
         }
         let mut i = self.inner.lock().unwrap();
         i.running = false;

@@ -24,7 +24,7 @@ import java.util.*
 @Composable
 fun DevicesScreen(store: LocalDropStore) {
     // Re-read on each composition so newly paired devices appear without restarting the app.
-    val devices = store.trustedDevices()
+    var devices by remember { mutableStateOf(store.trustedDevices()) }
     
     LazyColumn(
         modifier = Modifier
@@ -35,7 +35,7 @@ fun DevicesScreen(store: LocalDropStore) {
         item {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    text = "Trusted Devices",
+                    text = "Trusted devices",
                     style = MaterialTheme.typography.headlineLarge,
                     fontWeight = FontWeight.Bold
                 )
@@ -56,8 +56,8 @@ fun DevicesScreen(store: LocalDropStore) {
                 EmptyDevicesState()
             }
         } else {
-            items(devices) { device ->
-                TrustedDeviceCard(device, store)
+            items(devices, key = { it.id }) { device ->
+                TrustedDeviceCard(device, store, onRemoved = { devices = store.trustedDevices() })
             }
         }
     }
@@ -115,7 +115,7 @@ private fun EmptyDevicesState() {
         }
         
         Text(
-            text = "No Devices Yet",
+            text = "No paired devices yet",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold
         )
@@ -129,7 +129,7 @@ private fun EmptyDevicesState() {
 }
 
 @Composable
-private fun TrustedDeviceCard(device: TrustedDevice, store: LocalDropStore) {
+private fun TrustedDeviceCard(device: TrustedDevice, store: LocalDropStore, onRemoved: () -> Unit) {
     val dateFormat = remember { SimpleDateFormat("dd MMM yyyy, HH:mm", Locale("id", "ID")) }
     val lastSeenFormatted = remember(device.lastSeen) {
         dateFormat.format(Date.from(device.lastSeen))
@@ -156,13 +156,13 @@ private fun TrustedDeviceCard(device: TrustedDevice, store: LocalDropStore) {
                     modifier = Modifier
                         .size(56.dp)
                         .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0xFF5054C9).copy(alpha = 0.1f)),
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.Computer,
                         contentDescription = null,
-                        tint = Color(0xFF5054C9),
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(28.dp)
                     )
                 }
@@ -211,7 +211,7 @@ private fun TrustedDeviceCard(device: TrustedDevice, store: LocalDropStore) {
             // Fingerprint
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    text = "Fingerprint",
+                    text = "Device identifier · not an encryption key",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     letterSpacing = 1.sp
@@ -270,6 +270,7 @@ private fun TrustedDeviceCard(device: TrustedDevice, store: LocalDropStore) {
                     onClick = {
                         val updatedDevices = store.trustedDevices().filter { it.id != device.id }
                         store.saveTrustedDevices(updatedDevices)
+                        onRemoved()
                         showRemoveDialog = false
                     },
                     colors = ButtonDefaults.textButtonColors(

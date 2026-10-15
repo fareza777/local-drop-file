@@ -79,23 +79,23 @@ fn create_folder(base: String, token: String, path: String, name: String) -> Res
 #[tauri::command]
 fn delete_path(base: String, token: String, path: String) -> Result<Value, String> { service::delete_path(&base, &token, &path) }
 #[tauri::command]
-fn send_file(base: String, token: String, path: String, transfer_id: Option<String>, remote_path: Option<String>, state: State<'_, RuntimeState>) -> Result<Value, String> {
+async fn send_file(base: String, token: String, path: String, transfer_id: Option<String>, remote_path: Option<String>, state: State<'_, RuntimeState>) -> Result<Value, String> {
     let id = transfer_id.clone().unwrap_or_else(|| path.clone());
     let cancelled = Arc::new(AtomicBool::new(false));
     state.0.lock().map_err(|e| e.to_string())?.insert(id.clone(), cancelled.clone());
-    let result = service::send_file(&base, &token, &path, transfer_id.as_deref(), remote_path.as_deref(), &cancelled);
+    let result = tauri::async_runtime::spawn_blocking(move || service::send_file(&base, &token, &path, transfer_id.as_deref(), remote_path.as_deref(), &cancelled)).await.map_err(|e| e.to_string());
     state.0.lock().map_err(|e| e.to_string())?.remove(&id);
-    result
+    result?
 }
 #[tauri::command]
-fn receive_file(app: tauri::AppHandle, base: String, token: String, file_id: String, destination: String, transfer_id: Option<String>) -> Result<Value, String> {
+async fn receive_file(app: tauri::AppHandle, base: String, token: String, file_id: String, destination: String, transfer_id: Option<String>) -> Result<Value, String> {
     use tauri::Emitter;
     let id = transfer_id.unwrap_or_default();
     // Report progress after each chunk so large files show a live percentage.
-    let on_progress = |done: u64, total: u64| {
+    let on_progress = move |done: u64, total: u64| {
         let _ = app.emit("transfer-progress", serde_json::json!({"id": id, "done": done, "total": total}));
     };
-    service::receive_file(&base, &token, &file_id, &destination, on_progress)
+    tauri::async_runtime::spawn_blocking(move || service::receive_file(&base, &token, &file_id, &destination, on_progress)).await.map_err(|e| e.to_string())?
 }
 #[tauri::command]
 fn download_zip(app: tauri::AppHandle, base: String, token: String, paths: Vec<String>, estimated_total: Option<u64>, transfer_id: Option<String>) -> Result<Value, String> {

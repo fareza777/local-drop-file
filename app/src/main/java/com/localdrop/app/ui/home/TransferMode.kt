@@ -25,12 +25,12 @@ enum class TransferMode(
         icon = Icons.Default.QrCode2,
         tagline = "Send files to any computer with a browser",
         description = "LocalDrop starts a small private server on this phone. Scan the QR code with a computer or another phone on the same Wi-Fi, then download or upload files from the browser.",
-        color = Color(0xFF5054C9),
+        color = Color(0xFF3155CA),
         needs = "Same Wi-Fi as the other device",
         steps = listOf(
-            "Add the files you want to share, or keep the app open to receive.",
+            "Connect both devices to the same Wi-Fi. Browser Share can access shared phone storage.",
             "Tap Start Browser Share.",
-            "Scan the QR code with the other device's camera, or type the address shown.",
+            "Scan the QR code on another device, or copy the full private link including its token.",
             "Download files from the page, or upload files back to this phone."
         ),
         tips = listOf(
@@ -43,10 +43,10 @@ enum class TransferMode(
     PUSH(
         displayName = "Push to PC",
         icon = Icons.Default.Publish,
-        tagline = "Push hundreds or thousands of files from this phone to your PC",
-        description = "Your PC runs the LocalDrop receiver in the background. This phone pushes the files you pick over your private network (Tailscale or ZeroTier), keeps running while you use other apps, and resumes exactly where it stopped if the connection drops.",
-        color = Color(0xFF138A68),
-        needs = "Tailscale or ZeroTier on both devices",
+        tagline = "Select files and send them to your computer",
+        description = "Keep LocalDrop Desktop open on the PC. Start its receiver and paste the private receive link here. Choose files to send over the same Wi-Fi or a private VPN. Interrupted chunks can resume while the transfer service stays active.",
+        color = Color(0xFF3155CA),
+        needs = "Same Wi-Fi, or a private VPN for different networks",
         steps = listOf(
             "On the PC, open LocalDrop Desktop and press Start receiving on the Receive screen.",
             "Copy the address it shows and paste it below.",
@@ -56,7 +56,7 @@ enum class TransferMode(
         tips = listOf(
             "Already-received files are skipped, so you can safely push the same folder again.",
             "The push runs as a background service and survives screen lock and app switching.",
-            "LocalDrop never uses a relay: files travel directly between your devices."
+            "LocalDrop has no file-storage cloud. A VPN provider may relay encrypted traffic when a direct route is unavailable."
         ),
         isLive = true
     ),
@@ -65,16 +65,16 @@ enum class TransferMode(
         icon = Icons.Default.Public,
         tagline = "Reach your phone from another network using a private VPN",
         description = "Remote mode works through a private network such as Tailscale or ZeroTier. Both devices join the same private network, then connect as if they were on one LAN.",
-        color = Color(0xFFE0703A),
+        color = Color(0xFF3155CA),
         needs = "Tailscale or ZeroTier on both devices",
         steps = listOf(
             "Install Tailscale or ZeroTier on this phone and on the other device.",
             "Sign in to the same account or network on both.",
             "Confirm both devices show as connected in the VPN app.",
-            "Start Browser Share, then open the VPN address shown on the other device."
+            "Start Remote Private, then use the phone's reachable VPN address and port on the other device."
         ),
         tips = listOf(
-            "The VPN handles the connection. LocalDrop runs no servers of its own.",
+            "The VPN handles routing. LocalDrop runs a local HTTP server on this phone, not a hosted cloud server.",
             "Remote uses the same server as Browser Share, so the page and features are identical."
         ),
         isLive = true

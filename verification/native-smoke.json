@@ -1,0 +1,12 @@
+{
+  "checks": [
+    "Packaged GUI: discover, request pairing, Android approval, verify PIN, browse phone",
+    "Packaged GUI: select PC file, upload to Android; exact content verified",
+    "Transfer activity reports completion",
+    "Native receive bridge: Android file downloaded, exact round-trip content verified",
+    "Packaged GUI: dark theme and compact rows",
+    "Native receiver starts, shows real link, stops and restarts on the same isolated port"
+  ],
+  "errors": [],
+  "passed": true
+}
