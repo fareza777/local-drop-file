@@ -28,7 +28,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * Push to PC: streams files from this phone to the LocalDrop Desktop receiver.
+ * Push to PC: streams files from this phone to the Pushvia Desktop receiver.
  *
  * Runs in the foreground so it keeps going while the app is backgrounded or the
  * screen is locked. Resume is server-driven: before each file we ask the receiver
@@ -395,7 +395,12 @@ class PushService : Service() {
             val i = Intent(context, PushService::class.java)
                 .putExtra(EXTRA_ADDRESS, address)
                 .putExtra(EXTRA_URIS, ArrayList(uris))
-            androidx.core.content.ContextCompat.startForegroundService(context, i)
+            try {
+                androidx.core.content.ContextCompat.startForegroundService(context, i)
+            } catch (e: Exception) {
+                _state.value = PushState()
+                throw e
+            }
         }
 
         fun stop(context: Context) {

@@ -1,0 +1,10 @@
+{
+  "checks": [
+    "Manual address, pairing request, phone approval, PIN verification, phone folder listing",
+    "Upload through the native bridge (resumable chunk protocol): bytes verified on the phone",
+    "Download through the native bridge: .part file renamed, SHA-256 returned, exact bytes",
+    "Receive and Settings screens render in the packaged app"
+  ],
+  "errors": [],
+  "at": "2026-10-15T07:35:21.034Z"
+}

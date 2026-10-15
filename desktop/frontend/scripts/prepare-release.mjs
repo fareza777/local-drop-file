@@ -13,8 +13,8 @@ const find = async (dir, suffix) => {
   return path.join(dir, files[0]);
 };
 const artifacts = [
-  [await find(path.join(bundle, 'nsis'), '-setup.exe'), 'LocalDrop-Windows-x64-setup.exe'],
-  [await find(path.join(bundle, 'msi'), '.msi'), 'LocalDrop-Windows-x64.msi']
+  [await find(path.join(bundle, 'nsis'), '-setup.exe'), 'Pushvia-Windows-x64-setup.exe'],
+  [await find(path.join(bundle, 'msi'), '.msi'), 'Pushvia-Windows-x64.msi']
 ];
 await mkdir(output, { recursive: true });
 const sums = [];
@@ -24,5 +24,5 @@ for (const [source, name] of artifacts) {
   sums.push(`${hash.digest('hex')}  ${name}`);
 }
 await writeFile(path.join(output, 'SHA256SUMS.txt'), `${sums.join('\n')}\n`);
-await writeFile(path.join(output, 'INSTALL.txt'), 'LocalDrop Desktop for Windows x64\n\nRecommended: LocalDrop-Windows-x64-setup.exe (per-user installer).\nAlternate: LocalDrop-Windows-x64.msi.\nWebView2 is required; the installer downloads it if missing (internet needed).\nUse a trusted network; local HTTP transfer is not encrypted.\nVerify publisher signature and SHA256SUMS.txt before installing.\nUnsigned packages can trigger Windows SmartScreen warnings.\nThis directory is prepared locally; nothing was uploaded or published.\n');
+await writeFile(path.join(output, 'INSTALL.txt'), 'Pushvia Desktop for Windows x64\n\nRecommended: Pushvia-Windows-x64-setup.exe (per-user installer).\nAlternate: Pushvia-Windows-x64.msi.\nWebView2 is required; the installer downloads it if missing (internet needed).\nUse a trusted network; local HTTP transfer is not encrypted.\nVerify publisher signature and SHA256SUMS.txt before installing.\nUnsigned packages can trigger Windows SmartScreen warnings.\nLatest release: https://github.com/fareza777/local-drop-file/releases/latest\n');
 console.log(`Prepared ${artifacts.length} installers and SHA256SUMS.txt in ${output}. Nothing published.`);

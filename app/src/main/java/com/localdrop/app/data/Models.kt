@@ -36,10 +36,12 @@ data class AppSettings(
     val wifiOnly: Boolean = true,
     val keepScreenOn: Boolean = false,
     val lastMode: String = "BROWSER",
-    /** Receiver address pasted from LocalDrop Desktop for Push to PC. */
+    /** Receiver address pasted from Pushvia Desktop for Push to PC. */
     val pushAddress: String = "",
     /** Auto Backup Kamera: periodically push new camera photos/videos to the PC. */
-    val autoBackupEnabled: Boolean = false
+    val autoBackupEnabled: Boolean = false,
+    /** "System", "English" or "Indonesia". */
+    val language: String = "English"
 )
 
 class LocalDropStore(context: Context) {
@@ -55,7 +57,8 @@ class LocalDropStore(context: Context) {
             keepScreenOn = prefs.getBoolean("keep_screen_on", false),
             lastMode = prefs.getString("last_mode", "BROWSER") ?: "BROWSER",
             pushAddress = prefs.getString("push_address", "") ?: "",
-            autoBackupEnabled = prefs.getBoolean("auto_backup", false)
+            autoBackupEnabled = prefs.getBoolean("auto_backup", false),
+            language = prefs.getString("app_language", "English") ?: "English"
         )
         set(v) {
             prefs.edit()
@@ -68,6 +71,7 @@ class LocalDropStore(context: Context) {
                 .putString("last_mode", v.lastMode)
                 .putString("push_address", v.pushAddress)
                 .putBoolean("auto_backup", v.autoBackupEnabled)
+                .putString("app_language", v.language)
                 .apply()
         }
 

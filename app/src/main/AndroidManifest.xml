@@ -11,8 +11,8 @@
   <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
   <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
   <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
-  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-  <application android:theme="@style/AppTheme" android:label="LocalDrop" android:icon="@drawable/ic_localdrop" android:roundIcon="@drawable/ic_localdrop" android:usesCleartextTraffic="true" android:allowBackup="false">
+  <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+  <application android:theme="@style/AppTheme" android:label="Pushvia" android:icon="@drawable/ic_localdrop" android:roundIcon="@drawable/ic_localdrop" android:usesCleartextTraffic="true" android:allowBackup="false">
     <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-3940256099942544~3347511713" />
     <service android:name=".TransferServerService" android:exported="false" android:foregroundServiceType="dataSync" />
     <service android:name=".PushService" android:exported="false" android:foregroundServiceType="dataSync" />
@@ -34,7 +34,7 @@
       android:exported="false">
     </activity>
 
-    <!-- Share Sheet target: "Share → LocalDrop" from any app. -->
+    <!-- Share Sheet target: "Share → Pushvia" from any app. -->
     <activity
       android:name=".ui.share.ShareReceiveActivity"
       android:exported="true"
@@ -50,11 +50,5 @@
       </intent-filter>
     </activity>
 
-    <!-- Auto camera backup: wakes the backup check after reboot when enabled. -->
-    <receiver android:name=".AutoBackupBootReceiver" android:exported="false">
-      <intent-filter>
-        <action android:name="android.intent.action.BOOT_COMPLETED" />
-      </intent-filter>
-    </receiver>
   </application>
 </manifest>

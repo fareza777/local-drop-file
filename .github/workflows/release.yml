@@ -1,0 +1,61 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop
+      - run: npm ci
+        working-directory: desktop/frontend
+      - run: npm test
+        working-directory: desktop/frontend
+      - run: cargo test --locked
+        working-directory: desktop
+      - run: node frontend/node_modules/@tauri-apps/cli/tauri.js build --ci
+        working-directory: desktop
+      - run: npm run release:prepare
+        working-directory: desktop/frontend
+      - name: Publish installers
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" desktop/release/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" desktop/release/* --title "Pushvia ${GITHUB_REF_NAME#v}" --generate-notes
+          fi
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.14.3
+      - run: gradle :app:testDebugUnitTest :app:assembleDebug --no-daemon
+      - name: Attach debug APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk Pushvia-Android-debug.apk
+          for i in 1 2 3 4 5 6; do gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 && break; sleep 20; done
+          gh release upload "$GITHUB_REF_NAME" Pushvia-Android-debug.apk --clobber

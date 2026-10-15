@@ -1,4 +1,4 @@
-﻿# LocalDrop protocol (v1 draft)
+﻿# Pushvia protocol (v1 draft)
 
 Transfers require user authorization on a trusted local network. Bind only to a LAN interface, use an unpredictable 256-bit URL-safe bearer token, and stop at the configured deadline. Do not expose via port forwarding.
 
@@ -12,7 +12,7 @@ QR payloads contain origin, short-lived token, and protocol version. Show expiry
 
 ## Remote private mode
 
-When a Tailscale or ZeroTier interface is present, the desktop companion may advertise and connect through that private address. LocalDrop does not provide a relay, identity provider, or cloud storage. The user remains responsible for the overlay network ACL and device authorization. Prefer direct LAN addresses first, then overlay addresses, and reject public interfaces unless explicitly enabled.
+When a Tailscale or ZeroTier interface is present, the desktop companion may advertise and connect through that private address. Pushvia does not provide a relay, identity provider, or cloud storage. The user remains responsible for the overlay network ACL and device authorization. Prefer direct LAN addresses first, then overlay addresses, and reject public interfaces unless explicitly enabled.
 
 ## Planned direct-transfer extensions
 

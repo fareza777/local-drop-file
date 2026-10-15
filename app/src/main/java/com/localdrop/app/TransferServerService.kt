@@ -44,7 +44,7 @@ class TransferServerService : Service() {
         }
         val notification: Notification = NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_localdrop)
-            .setContentTitle("LocalDrop is active")
+            .setContentTitle("Pushvia is active")
             .setContentText("$mode is running")
             .setOngoing(true)
             .build()
@@ -88,6 +88,7 @@ class TransferServerService : Service() {
 
         @Volatile private var instance: LocalHttpServer? = null
         private var watchdog: java.util.Timer? = null
+        private var multicastLock: android.net.wifi.WifiManager.MulticastLock? = null
 
         /** PIN shown on the phone for Browser Share when PIN protection is on; null otherwise. */
         private val _accessPin = MutableStateFlow<String?>(null)
@@ -175,6 +176,11 @@ class TransferServerService : Service() {
             return try {
                 val url = server.start()
                 instance = server
+                // Many phones drop broadcast packets unless a multicast lock is held; this lets the desktop find the phone.
+                multicastLock = runCatching {
+                    (app.getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager)
+                        .createMulticastLock("localdrop-discovery").apply { setReferenceCounted(false); acquire() }
+                }.getOrNull()
                 // Browsers need the token in the URL; the page reads it from ?token= and sends it on each request.
                 // "url" is the short address shown on screen; the token travels in the copy/QR link.
                 _state.value = ServerState(true, url, token.value)
@@ -213,6 +219,8 @@ class TransferServerService : Service() {
             watchdog = null
             instance?.stop()
             instance = null
+            runCatching { multicastLock?.release() }
+            multicastLock = null
             _state.value = ServerState()
         }
 

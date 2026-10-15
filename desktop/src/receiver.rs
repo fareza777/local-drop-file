@@ -266,7 +266,7 @@ fn handle(app: &AppHandle, mut request: Request, dest: &Path, token: &str, sessi
 
     // Health is open so the phone can confirm it reached a LocalDrop receiver.
     if method == "GET" && path == "/health" {
-        respond(request, 200, json!({"name":"LocalDrop Desktop","protocol":"v1","push":true}));
+        respond(request, 200, json!({"name":"Pushvia Desktop","protocol":"v1","push":true}));
         return Some(());
     }
 
@@ -300,6 +300,7 @@ fn handle(app: &AppHandle, mut request: Request, dest: &Path, token: &str, sessi
                                 s.files_done += 1;
                                 s.bytes_done += size;
                             }
+                            let _ = app.emit("receiver-progress", json!({"fileId": file_id, "done": size, "size": size, "complete": true, "counts": counts(session)}));
                             respond(request, 200, json!({"received": size, "size": size, "complete": true, "skip": true}));
                             return Some(());
                         }
@@ -317,9 +318,12 @@ fn handle(app: &AppHandle, mut request: Request, dest: &Path, token: &str, sessi
                         }
                         let dest_final = dedup_name(dest_final);
                         if fs::rename(&part, &dest_final).is_ok() {
-                            let mut s = session.lock().unwrap();
-                            s.files_done += 1;
-                            s.bytes_done += size;
+                            {
+                                let mut s = session.lock().unwrap();
+                                s.files_done += 1;
+                                s.bytes_done += size;
+                            }
+                            let _ = app.emit("receiver-progress", json!({"fileId": file_id, "done": size, "size": size, "complete": true, "counts": counts(session)}));
                             respond(request, 200, json!({"received": size, "size": size, "complete": true, "skip": true}));
                             return Some(());
                         }

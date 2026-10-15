@@ -32,6 +32,8 @@ object AutoBackupStore {
     fun isEnabled(context: Context): Boolean = prefs(context).getBoolean(KEY_ENABLED, false)
     fun setEnabled(context: Context, value: Boolean) {
         prefs(context).edit().putBoolean(KEY_ENABLED, value).apply()
+        // First enable backs up what you shoot from now on, not the whole existing gallery.
+        if (value && lastTimestamp(context) == 0L) saveLastTimestamp(context, System.currentTimeMillis())
         if (value) schedule(context) else cancel(context)
     }
 
@@ -60,7 +62,7 @@ object AutoBackupStore {
         prefs(context).edit().clear().apply()
     }
 
-    // Scheduling is provided by AutoBackupScheduler (alarm-based).
+    // Scheduling is provided by AutoBackupScheduler (WorkManager).
     fun schedule(context: Context) = AutoBackupScheduler.schedule(context)
     fun cancel(context: Context) = AutoBackupScheduler.cancel(context)
 
@@ -78,9 +80,10 @@ object AutoBackupStore {
             MediaStore.MediaColumns.DATE_ADDED,
             MediaStore.Files.FileColumns.MEDIA_TYPE
         )
-        // DATE_ADDED is seconds; compare against seconds. Only images and videos.
+        // DATE_ADDED is seconds. ">=" so files added in the same second as the checkpoint are not missed
+        // (rows already pushed are filtered out below). Only images and videos.
         val afterSec = afterMs / 1000
-        val selection = "${MediaStore.MediaColumns.DATE_ADDED} > ? AND " +
+        val selection = "${MediaStore.MediaColumns.DATE_ADDED} >= ? AND " +
             "${MediaStore.Files.FileColumns.MEDIA_TYPE} IN (?, ?)"
         val args = arrayOf(afterSec.toString(), MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE.toString(), MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO.toString())
         try {

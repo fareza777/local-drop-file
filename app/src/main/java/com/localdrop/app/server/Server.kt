@@ -17,6 +17,15 @@ class SessionToken private constructor(val value:String,val expiresAt:Instant) {
  companion object { fun issue(ttlSeconds:Long=900):SessionToken { require(ttlSeconds in 30..30L*24*3600); return SessionToken(Base64.getUrlEncoder().withoutPadding().encodeToString(ByteArray(32).also{SecureRandom().nextBytes(it)}),Instant.now().plusSeconds(ttlSeconds)) } }
 }
 
+/** Locks a caller out for [lockMs] after [maxFailures] wrong PINs, so a six-digit PIN cannot be guessed by brute force. */
+class AttemptLimiter(private val maxFailures:Int=5,private val lockMs:Long=60_000,private val clock:()->Long={System.currentTimeMillis()}) {
+ private class State(var fails:Int=0,var lockedUntil:Long=0)
+ private val states=ConcurrentHashMap<String,State>()
+ fun isLocked(key:String):Boolean=states[key]?.let{synchronized(it){it.lockedUntil>clock()}}==true
+ fun fail(key:String){ val s=states.computeIfAbsent(key){State()}; synchronized(s){ if(s.lockedUntil!=0L&&s.lockedUntil<=clock()){s.lockedUntil=0;s.fails=0}; if(++s.fails>=maxFailures){s.lockedUntil=clock()+lockMs;s.fails=0} } }
+ fun success(key:String){states.remove(key)}
+}
+
 /** Optional persistence adapter. Implement with Android SharedPreferences/DataStore in the UI layer. */
 interface TrustedDeviceStore { fun put(deviceId:String,deviceName:String,fingerprint:String); fun contains(deviceId:String,fingerprint:String):Boolean }
 class FileTrustedDeviceStore(private val file:File):TrustedDeviceStore {
@@ -29,12 +38,13 @@ class FileTrustedDeviceStore(private val file:File):TrustedDeviceStore {
 class LocalHttpServer(private val root:File,private val token:SessionToken,private val trusted:TrustedDeviceStore?=null,private val pageProvider:()->String={DEFAULT_PAGE},private val accessPin:String?=null) {
  /** Browser sessions that have entered the access PIN (only used when accessPin is set). */
  private val unlockedSessions=ConcurrentHashMap<String,Boolean>()
- companion object { const val PORT=5252; const val DEFAULT_PAGE="<!doctype html><html><body><p>LocalDrop</p></body></html>" }
+ companion object { const val PORT=5252; const val DISCOVERY_PORT=42199; const val DEFAULT_PAGE="<!doctype html><html><body><p>Pushvia</p></body></html>" }
  // Bounded handler pool: a grid of hundreds of image thumbnails must not spawn hundreds of threads (that is what killed the app during bulk ops).
  private val acceptPool=Executors.newSingleThreadExecutor(); private val pool=Executors.newFixedThreadPool(8); @Volatile private var socket:ServerSocket?=null; var origin=""; private set
  private val paired=ConcurrentHashMap<String,SessionToken>(); private val pairedOwners=ConcurrentHashMap<String,Pair<String,String>>(); private val requests=ConcurrentHashMap<String,PairRequest>(); private val transfers=ConcurrentHashMap<String,Transfer>()
- private val random=SecureRandom(); private val maxFile=100L*1024*1024; private val maxChunk=4L*1024*1024
- data class PairRequest(val id:String,val pin:String,val fingerprint:String,val deviceId:String,val deviceName:String,val expires:Long,@Volatile var approved:Boolean=false)
+ private val random=SecureRandom(); private val maxFile=100L*1024*1024; private val maxTransfer=8L*1024*1024*1024; private val maxChunk=4L*1024*1024; private val limiter=AttemptLimiter(); private val idPattern=Regex("^[A-Za-z0-9_-]{1,80}$")
+ @Volatile private var discovery:DatagramSocket?=null
+ data class PairRequest(val id:String,val pin:String,val fingerprint:String,val deviceId:String,val deviceName:String,val expires:Long,@Volatile var approved:Boolean=false,@Volatile var wrongPins:Int=0)
  data class Transfer(val id:String,val fileId:String,val name:String,val size:Long,val expected:String,val temp:File,var received:Long=0)
  /** Called on the server thread when a new pairing request arrives. UI should post to the main thread. */
  @Volatile var onPairRequest:((PairRequest)->Unit)?=null
@@ -42,38 +52,41 @@ class LocalHttpServer(private val root:File,private val token:SessionToken,priva
  @Volatile var onPairingChanged:(()->Unit)?=null
  /** Called whenever a transfer completes, so the app can record History. [outgoing]=true when the file left this phone. */
  @Volatile var onTransfer:((name:String,size:Long,outgoing:Boolean)->Unit)?=null
- fun start():String { if(socket!=null)return origin; root.mkdirs(); socket=try{ServerSocket(PORT,20,InetAddress.getByName("0.0.0.0"))}catch(_:Exception){ServerSocket(0,20,InetAddress.getByName("0.0.0.0"))}; val s=socket!!; origin="http://${lanAddress()}:${s.localPort}"; acceptPool.execute { while(!s.isClosed) try { val c=s.accept(); pool.execute{handle(c)} } catch(_:Exception){} }; return origin }
- fun stop(){socket?.close();socket=null;origin="";transfers.clear();paired.clear();pairedOwners.clear();requests.clear();acceptPool.shutdownNow();pool.shutdownNow()}; fun isRunning()=socket?.isClosed==false
+ fun start():String { if(socket!=null)return origin; root.mkdirs(); socket=try{ServerSocket(PORT,20,InetAddress.getByName("0.0.0.0"))}catch(_:Exception){ServerSocket(0,20,InetAddress.getByName("0.0.0.0"))}; val s=socket!!; origin="http://${lanAddress()}:${s.localPort}"; acceptPool.execute { while(!s.isClosed) try { val c=s.accept(); pool.execute{handle(c)} } catch(_:Exception){} }; startDiscovery(s.localPort); return origin }
+ fun stop(){socket?.close();socket=null;discovery?.close();discovery=null;origin="";transfers.clear();paired.clear();pairedOwners.clear();requests.clear();acceptPool.shutdownNow();pool.shutdownNow()}; fun isRunning()=socket?.isClosed==false
  @Volatile var lastActivity:Long=System.currentTimeMillis(); private set
- private fun handle(c:Socket){ c.use { val input=BufferedInputStream(c.getInputStream());val out=BufferedOutputStream(c.getOutputStream());val req=readHeaders(input)?:return; lastActivity=System.currentTimeMillis()
+ private fun handle(c:Socket){ c.use { val ip=c.inetAddress?.hostAddress?:"?"; val input=BufferedInputStream(c.getInputStream());val out=BufferedOutputStream(c.getOutputStream());val req=readHeaders(input)?:return; lastActivity=System.currentTimeMillis()
   val auth=(req.headers["authorization"]?.removePrefix("Bearer ") ?: req.query["token"] ?: "").trim()
   // Pairing starts unauthenticated, but approval happens only on the phone (see approvePairing).
   val open=req.path=="/api/v1/pair/request"||req.path=="/api/v1/pair/verify"||req.path=="/api/v1/health"||req.path=="/"||req.path=="/api/v1/unlock"
   if(!open&&!validAuth(auth)){respond(out,"Unauthorized","text/plain",401);return}
   // Typing the short PIN from the phone gives this browser a session token, so the long link is not needed.
   if(req.path=="/api/v1/unlock"){
+    if(limiter.isLocked(ip)){respond(out,"{\"ok\":false,\"error\":\"locked\"}","application/json",429);return}
     val pin=(req.query["pin"]?:"").trim()
     // With no PIN set, this simply hands the page a session token; with a PIN, the PIN must match.
-    if(accessPin==null||pin==accessPin){ val t=SessionToken.issue(3600); paired[t.value]=t; respond(out,"{\"ok\":true,\"token\":\"${t.value}\"}","application/json") }
-    else respond(out,"{\"ok\":false}","application/json",403)
+    if(accessPin==null||MessageDigest.isEqual(pin.toByteArray(),accessPin.toByteArray())){ limiter.success(ip); val t=SessionToken.issue(3600); paired[t.value]=t; respond(out,"{\"ok\":true,\"token\":\"${t.value}\"}","application/json") }
+    else { limiter.fail(ip); respond(out,"{\"ok\":false}","application/json",403) }
     return
   }
   // With PIN protection on, the data routes need a token obtained from the PIN (or the QR link token).
   if(accessPin!=null&&!req.path.startsWith("/api/v1/unlock")&&req.path!="/"&&req.path!="/api/v1/health"&&!pairingRoute(req.path)&&!validAuth(auth)){respond(out,"PIN required","text/plain",403);return}
-  when { req.method=="GET"&&req.path=="/api/v1/health"->respond(out,"{\"name\":\"LocalDrop Android\",\"device_id\":\"android-${root.name}\",\"protocol\":\"v1\"}","application/json")
+  when { req.method=="GET"&&req.path=="/api/v1/health"->respond(out,"{\"name\":\"Pushvia Android\",\"device_id\":\"android-${root.name}\",\"protocol\":\"v1\"}","application/json")
    req.method=="GET"&&req.path=="/"->respond(out,pageProvider(),"text/html; charset=utf-8")
    req.method=="GET"&&req.path=="/api/v1/files"->respond(out,listFiles(),"application/json")
    req.method=="GET"&&req.path=="/api/v1/thumb"->thumbnail(out,req)
    req.method=="GET"&&req.path.startsWith("/api/v1/files/")->download(out,req.path.removePrefix("/api/v1/files/"),req.headers["sec-fetch-dest"]=="image")
    req.method=="POST"&&req.path=="/api/v1/files"->upload(out,input,req)
-   req.method=="POST"&&req.path=="/api/v1/pair/request"->pairRequest(out,input,req)
-   req.method=="POST"&&req.path=="/api/v1/pair/verify"->pairVerify(out,input,req)
+   req.method=="POST"&&req.path=="/api/v1/pair/request"->pairRequest(out,input,req,ip)
+   req.method=="POST"&&req.path=="/api/v1/pair/verify"->pairVerify(out,input,req,ip)
    req.method=="GET"&&req.path=="/api/v1/transfer/files"->respond(out,listTransferFiles(req.query["path"]?:""),"application/json")
    req.method=="GET"&&req.path=="/api/v1/transfer/tree"->respond(out,folderTree(),"application/json")
    req.method=="POST"&&req.path=="/api/v1/transfer/folder"->createFolder(out,input,req)
    req.method=="DELETE"&&req.path=="/api/v1/transfer/path"->deletePath(out,req)
    (req.method=="POST"||req.method=="PUT")&&req.path=="/api/v1/transfer/chunk"->chunk(out,input,req)
    req.method=="GET"&&req.path=="/api/v1/transfer/chunk"->downloadChunk(out,req)
+   req.method=="GET"&&req.path=="/api/v1/transfer/status"->transferStatus(out,req)
+   req.method=="POST"&&req.path=="/api/v1/transfer/empty"->createEmpty(out,req)
    req.method=="POST"&&req.path=="/api/v1/transfer/upload"->uploadToFolder(out,input,req)
    req.method=="POST"&&req.path=="/api/v1/transfer/delete-many"->deleteMany(out,input,req)
    req.method=="POST"&&req.path=="/api/v1/transfer/move"->moveMany(out,input,req)
@@ -90,9 +103,9 @@ class LocalHttpServer(private val root:File,private val token:SessionToken,priva
  private fun pairingRoute(p:String)=p=="/api/v1/pair/request"||p=="/api/v1/pair/verify"
  private fun body(i:InputStream,r:Request,max:Int=64*1024):String { val n=r.headers["content-length"]?.toIntOrNull()?:return "";if(n<0||n>max)throw IOException("body too large");val b=ByteArray(n);var p=0;while(p<n){val x=i.read(b,p,n-p);if(x<0)throw EOFException();p+=x};return String(b,StandardCharsets.UTF_8) }
  /** Desktop asks to pair. Creates a request that the phone user must approve on screen. */
- private fun pairRequest(o:BufferedOutputStream,i:InputStream,r:Request){try{val j=body(i,r);val fp=field(j,"fingerprint");val device=field(j,"device_id").ifBlank{UUID.randomUUID().toString()};val name=field(j,"name").ifBlank{"Desktop $device"}.take(60);if(fp.isBlank()||fp.length>200)throw IOException();val pin=(100000+random.nextInt(900000)).toString();val id=UUID.randomUUID().toString();val req=PairRequest(id,pin,fp,device,name,System.currentTimeMillis()+5*60*1000);requests[id]=req;onPairRequest?.invoke(req);respond(o,"{\"request_id\":\"$id\",\"expires_in\":300}","application/json",201)}catch(_:Exception){respond(o,"Invalid pairing request","text/plain",400)} }
+ private fun pairRequest(o:BufferedOutputStream,i:InputStream,r:Request,ip:String){try{if(limiter.isLocked(ip)||requests.values.count{it.expires>=System.currentTimeMillis()}>=8){respond(o,"Too many pairing requests","text/plain",429);return};val j=body(i,r);val fp=field(j,"fingerprint");val device=field(j,"device_id").ifBlank{UUID.randomUUID().toString()};val name=field(j,"name").ifBlank{"Desktop $device"}.take(60);if(fp.isBlank()||fp.length>200)throw IOException();val pin=(100000+random.nextInt(900000)).toString();val id=UUID.randomUUID().toString();val req=PairRequest(id,pin,fp,device,name,System.currentTimeMillis()+5*60*1000);requests[id]=req;onPairRequest?.invoke(req);respond(o,"{\"request_id\":\"$id\",\"expires_in\":300}","application/json",201)}catch(_:Exception){respond(o,"Invalid pairing request","text/plain",400)} }
  /** Desktop submits the PIN it was shown. Succeeds only if the phone user approved this request. */
- private fun pairVerify(o:BufferedOutputStream,i:InputStream,r:Request){try{val j=body(i,r);val id=field(j,"request_id");val pin=field(j,"pin");val q=requests[id]?:throw IOException();if(!q.approved||q.expires<System.currentTimeMillis()||!MessageDigest.isEqual(pin.toByteArray(),q.pin.toByteArray()))throw IOException();requests.remove(id);trusted?.put(q.deviceId,q.deviceName,q.fingerprint);onPairingChanged?.invoke();/* Tokens last at most 30 days, but are held in memory and expire when sharing restarts. */val ttl=30L*24*3600;val t=SessionToken.issue(ttl);paired[t.value]=t;pairedOwners[t.value]=q.deviceId to q.fingerprint;respond(o,"{\"access_token\":\"${t.value}\",\"device_id\":\"${escape(q.deviceId)}\",\"expires_in\":$ttl}","application/json")}catch(_:Exception){respond(o,"Pairing failed","text/plain",401)} }
+ private fun pairVerify(o:BufferedOutputStream,i:InputStream,r:Request,ip:String){try{if(limiter.isLocked(ip)){respond(o,"Too many attempts. Wait a minute.","text/plain",429);return};val j=body(i,r);val id=field(j,"request_id");val pin=field(j,"pin");val q=requests[id]?:throw IOException();val pinOk=MessageDigest.isEqual(pin.toByteArray(),q.pin.toByteArray());if(!pinOk){limiter.fail(ip);if(++q.wrongPins>=5){requests.remove(id);onPairingChanged?.invoke()};throw IOException()};if(!q.approved||q.expires<System.currentTimeMillis())throw IOException();limiter.success(ip);requests.remove(id);trusted?.put(q.deviceId,q.deviceName,q.fingerprint);onPairingChanged?.invoke();/* Tokens last at most 30 days, but are held in memory and expire when sharing restarts. */val ttl=30L*24*3600;val t=SessionToken.issue(ttl);paired[t.value]=t;pairedOwners[t.value]=q.deviceId to q.fingerprint;respond(o,"{\"access_token\":\"${t.value}\",\"device_id\":\"${escape(q.deviceId)}\",\"expires_in\":$ttl}","application/json")}catch(_:Exception){respond(o,"Pairing failed","text/plain",401)} }
  /** Called from the phone UI. Only a local action can approve; no HTTP route exists for it. */
  fun approvePairing(requestId:String):Boolean{val q=requests[requestId]?:return false;if(q.expires<System.currentTimeMillis())return false;q.approved=true;return true}
  fun rejectPairing(requestId:String){requests.remove(requestId)}
@@ -138,7 +151,16 @@ private fun pathInfo(o:BufferedOutputStream,r:Request){try{val f=safePath(r.quer
 private fun jsonStringArray(j:String,key:String):List<String>{val m=Regex("\"$key\"\\s*:\\s*\\[([^\\]]*)\\]").find(j)?:return emptyList();return Regex("\"((?:[^\"\\\\]|\\\\.)*)\"").findAll(m.groupValues[1]).map{it.groupValues[1].replace("\\\"","\"").replace("\\\\","\\")}.toList()}
 private fun deletePath(o:BufferedOutputStream,r:Request){try{val f=safePath(r.query["path"]?:"")?:throw IOException();if(f.isDirectory)f.deleteRecursively() else if(!f.delete())throw IOException();respond(o,"{\"ok\":true}","application/json")}catch(_:Exception){respond(o,"Invalid path","text/plain",400)}}
 
- private fun chunk(o:BufferedOutputStream,i:InputStream,r:Request){try{val id=r.query["transfer_id"]?:throw IOException();val fid=r.query["file_id"]?:throw IOException();val offset=(r.query["offset"]?:"0").toLong();val size=r.headers["content-length"]?.toLongOrNull()?:throw IOException();val total=r.headers["x-file-size"]?.toLongOrNull()?:throw IOException();if(total !in 1..maxFile||size !in 1..maxChunk||offset<0||offset+size>total)throw IOException();val dest=safePath(fid)?:throw IOException();val key=id;val temp=File(root,".$key.part");val t=transfers.computeIfAbsent(key){Transfer(key,fid,fid.substringAfterLast('/'),total,r.headers["x-sha256"]?:throw IOException(),temp)};if(t.fileId!=fid||t.size!=total||t.expected!=r.headers["x-sha256"]||offset!=t.received)throw IOException();temp.parentFile?.mkdirs();RandomAccessFile(temp,"rw").use{it.seek(offset);val b=ByteArray(8192);var left=size;while(left>0){val n=i.read(b,0,minOf(b.size.toLong(),left).toInt());if(n<0)throw EOFException();it.write(b,0,n);left-=n}};t.received+=size;if(t.received==t.size){if(!t.expected.equals(sha256(temp),true))throw IOException("hash mismatch");dest.parentFile?.mkdirs();val final=if(dest.exists())safePath("${fid.substringBeforeLast('/',"").let{if(it.isEmpty())"" else "$it/"}}${System.currentTimeMillis()}-${dest.name}")?:throw IOException() else dest;if(!temp.renameTo(final))throw IOException();transfers.remove(t.id);onTransfer?.invoke(final.name,t.size,false);respond(o,"{\"complete\":true,\"file_id\":\"${escape(fid)}\",\"sha256\":\"${sha256(final)}\"}","application/json",201)}else respond(o,"{\"transfer_id\":\"${escape(t.id)}\",\"offset\":${t.received},\"complete\":false}","application/json")}catch(_:Exception){respond(o,"Invalid chunk","text/plain",400)} }
+ private fun chunk(o:BufferedOutputStream,i:InputStream,r:Request){try{val id=r.query["transfer_id"]?.takeIf{idPattern.matches(it)}?:throw IOException();val fid=r.query["file_id"]?:throw IOException();val offset=(r.query["offset"]?:"0").toLong();val size=r.headers["content-length"]?.toLongOrNull()?:throw IOException();val total=r.headers["x-file-size"]?.toLongOrNull()?:throw IOException();if(total !in 1..maxTransfer||size !in 1..maxChunk||offset<0||offset+size>total)throw IOException();val dest=safePath(fid)?:throw IOException();val key=id;val temp=File(root,".$key.part");val t=transfers.computeIfAbsent(key){Transfer(key,fid,fid.substringAfterLast('/'),total,r.headers["x-sha256"]?:throw IOException(),temp,partialLength(temp,total))};if(t.fileId!=fid||t.size!=total||t.expected!=r.headers["x-sha256"]||offset!=t.received)throw IOException();temp.parentFile?.mkdirs();RandomAccessFile(temp,"rw").use{it.seek(offset);val b=ByteArray(8192);var left=size;while(left>0){val n=i.read(b,0,minOf(b.size.toLong(),left).toInt());if(n<0)throw EOFException();it.write(b,0,n);left-=n}};t.received+=size;if(t.received==t.size){if(!t.expected.equals(sha256(temp),true))throw IOException("hash mismatch");dest.parentFile?.mkdirs();val final=if(dest.exists())safePath("${fid.substringBeforeLast('/',"").let{if(it.isEmpty())"" else "$it/"}}${System.currentTimeMillis()}-${dest.name}")?:throw IOException() else dest;if(!temp.renameTo(final))throw IOException();transfers.remove(t.id);onTransfer?.invoke(final.name,t.size,false);respond(o,"{\"complete\":true,\"file_id\":\"${escape(fid)}\",\"sha256\":\"${sha256(final)}\"}","application/json",201)}else respond(o,"{\"transfer_id\":\"${escape(t.id)}\",\"offset\":${t.received},\"complete\":false}","application/json")}catch(_:Exception){respond(o,"Invalid chunk","text/plain",400)} }
+ /** Bytes already stored for an interrupted upload; a stale or already-complete part file is discarded. */
+ private fun partialLength(temp:File,total:Long):Long{ if(!temp.isFile)return 0; val n=temp.length(); if(n in 1 until total)return n; temp.delete(); return 0 }
+ /** Lets a desktop continue an upload after a dropped connection: reports how many bytes are safely on the phone. */
+ private fun transferStatus(o:BufferedOutputStream,r:Request){try{val id=r.query["transfer_id"]?.takeIf{idPattern.matches(it)}?:throw IOException();val fid=r.query["file_id"]?:throw IOException();val size=r.query["size"]?.toLongOrNull()?:throw IOException();safePath(fid)?:throw IOException();val live=transfers[id]?.takeIf{it.fileId==fid&&it.size==size};val offset=live?.received?:partialLength(File(root,".$id.part"),size);respond(o,"{\"transfer_id\":\"$id\",\"offset\":$offset}","application/json")}catch(_:Exception){respond(o,"Invalid status request","text/plain",400)}}
+ /** Empty files cannot be sent in chunks, so they get their own endpoint. Existing names are kept, never overwritten. */
+ private fun createEmpty(o:BufferedOutputStream,r:Request){try{val fid=r.query["file_id"]?:throw IOException();val dest=safePath(fid)?:throw IOException();dest.parentFile?.mkdirs();val final=if(dest.exists())safePath("${fid.substringBeforeLast('/',"").let{if(it.isEmpty())"" else "$it/"}}${System.currentTimeMillis()}-${dest.name}")?:throw IOException() else dest;if(!final.createNewFile())throw IOException();onTransfer?.invoke(final.name,0,false);respond(o,"{\"complete\":true,\"file_id\":\"${escape(fid)}\"}","application/json",201)}catch(_:Exception){respond(o,"Invalid file","text/plain",400)}}
+ /** Answers LAN discovery probes from the desktop app so the phone shows up without typing an address. */
+ private fun startDiscovery(port:Int){ try{ val d=DatagramSocket(null).apply{reuseAddress=true;bind(InetSocketAddress(DISCOVERY_PORT))}; discovery=d; val label=deviceName(); Thread{ val buf=ByteArray(256); while(!d.isClosed){ try{ val p=DatagramPacket(buf,buf.size); d.receive(p); if(String(p.data,0,p.length,StandardCharsets.UTF_8).startsWith("LOCALDROP/1 DISCOVER")){ val reply="{\"name\":\"${escape(label)}\",\"device_id\":\"android-${escape(root.name)}\",\"port\":$port}".toByteArray(); d.send(DatagramPacket(reply,reply.size,p.socketAddress)) } }catch(_:Exception){} } }.apply{isDaemon=true;name="localdrop-discovery";start()} }catch(_:Exception){ /* discovery is optional; manual address still works */ } }
+ private fun deviceName():String=listOfNotNull(android.os.Build.MANUFACTURER,android.os.Build.MODEL).joinToString(" ").trim().ifBlank{"Pushvia Android"}.take(60)
  private fun downloadChunk(o:BufferedOutputStream,r:Request){
   val f=safePath(r.query["file_id"]?:"")
   if(f==null||!f.isFile){respond(o,"Not found","text/plain",404);return}

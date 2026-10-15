@@ -35,3 +35,8 @@ desktop/release/
 
 # Local agent/tool scratch data
 .freebuff/
+
+# Local verification scratch data
+verification/tmp/
+verification/native/downloaded.txt
+verification/native/pushvia-smoke.txt

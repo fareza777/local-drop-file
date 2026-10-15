@@ -23,7 +23,7 @@ class PolishUiTest {
         compose.onNodeWithText("Phone to PC.\nOne clear route.").assertIsDisplayed()
         compose.onNodeWithText("Continue").performClick()
         compose.onNodeWithText("Your network.\nYour control.").assertIsDisplayed()
-        compose.onNodeWithText("Open LocalDrop").performClick()
+        compose.onNodeWithText("Open Pushvia").performClick()
         compose.runOnIdle { assertTrue(completed) }
     }
     @Test fun settingsChangesThemeAndOpensDevicesWithoutLongScroll() {

@@ -49,12 +49,12 @@ fun SplashScreen(onFinish: () -> Unit) {
         }
         Column(Modifier.alpha(alpha).scale(scale), horizontalAlignment = Alignment.CenterHorizontally) {
             Box(Modifier.size(92.dp).background(Color(0xFF29375B), RoundedCornerShape(28.dp)), contentAlignment = Alignment.Center) {
-                Icon(Icons.Default.SwapHoriz, contentDescription = "LocalDrop", tint = Color(0xFFDCE4FF), modifier = Modifier.size(54.dp))
+                Icon(Icons.Default.SwapHoriz, contentDescription = "Pushvia", tint = Color(0xFFDCE4FF), modifier = Modifier.size(54.dp))
             }
             Spacer(Modifier.height(26.dp))
-            Text("LocalDrop", color = Color(0xFFF2F4FC), fontWeight = FontWeight.Bold, fontSize = 36.sp, letterSpacing = (-1.2).sp)
+            Text("Pushvia", color = Color(0xFFF2F4FC), fontWeight = FontWeight.Bold, fontSize = 36.sp, letterSpacing = (-1.2).sp)
             Spacer(Modifier.height(8.dp))
-            Text("Your devices. Your network.", color = Color(0xFFB9C2D8), fontSize = 16.sp)
+            Text("File Transfer & Sync", color = Color(0xFFB9C2D8), fontSize = 16.sp)
         }
         Text("ANDROID + DESKTOP", color = Color(0xFF8B98B6), fontSize = 12.sp, letterSpacing = 2.sp, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 36.dp))
     }

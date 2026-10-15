@@ -1,4 +1,4 @@
-# LocalDrop release checklist
+# Pushvia release checklist
 
 ## Recommended desktop distribution
 
@@ -7,11 +7,11 @@ Use one official public download hub: this repository's [GitHub Releases](https:
 1. Build and verify the current version locally; run `npm run release:prepare` from `desktop/frontend`.
 2. Test installation/uninstallation on a clean Windows x64 PC, including missing WebView2 and a standard non-administrator account. Confirm receiving stops on close and Windows startup remains opt-in.
 3. Sign the executable and installers with the publisher's code-signing identity. Store signing credentials outside source control. Unsigned downloads may trigger SmartScreen; signing alone does not guarantee immediate reputation.
-4. Prepare a draft GitHub Release and attach `LocalDrop-Windows-x64-setup.exe`, `LocalDrop-Windows-x64.msi`, `SHA256SUMS.txt`, release notes and installation guidance. Do not publish until explicitly authorized.
+4. Prepare a draft GitHub Release and attach `Pushvia-Windows-x64-setup.exe`, `Pushvia-Windows-x64.msi`, `SHA256SUMS.txt`, release notes and installation guidance. Do not publish until explicitly authorized.
 5. After publishing a stable release, keep asset names consistent. Share this durable page in Play listing, Android Settings and support material:
    `https://github.com/fareza777/local-drop-file/releases/latest`
 6. A one-click setup link is usable only after that exact asset exists in a stable release:
-   `https://github.com/fareza777/local-drop-file/releases/latest/download/LocalDrop-Windows-x64-setup.exe`
+   `https://github.com/fareza777/local-drop-file/releases/latest/download/Pushvia-Windows-x64-setup.exe`
 7. Consider immutable releases and build attestations. Recalculate checksums after signing. Checksums detect corruption; they are not a replacement for publisher signing.
 
 Do not advertise the bare EXE as a fully portable app yet. Its clean-machine WebView2/data-storage behavior has not been verified. MSI and setup artifacts are available locally; they are not yet a live download service.

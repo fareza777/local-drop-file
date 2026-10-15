@@ -29,6 +29,8 @@ import com.localdrop.app.ui.home.TransferMode
 import com.localdrop.app.ui.onboarding.OnboardingScreen
 import com.localdrop.app.ui.settings.SettingsScreen
 import com.localdrop.app.ui.theme.LocalDropTheme
+import com.localdrop.app.ui.LocalAppLanguage
+import com.localdrop.app.ui.tr
 import com.localdrop.app.ui.guide.ModeGuideSheet
 
 class MainActivity : ComponentActivity() {
@@ -38,22 +40,24 @@ class MainActivity : ComponentActivity() {
         setContent {
             val store = remember { LocalDropStore(this) }
             var theme by remember { mutableStateOf(store.settings.theme) }
+            var language by remember { mutableStateOf(store.settings.language) }
             LocalDropTheme(themeMode = theme) {
-                LocalDropApp(store = store, onThemeChanged = { theme = it })
+                CompositionLocalProvider(LocalAppLanguage provides language) {
+                    LocalDropApp(store = store, onThemeChanged = { theme = it }, onLanguageChanged = { language = it })
+                }
             }
         }
     }
 }
-private enum class Tab(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    HOME("Home", Icons.Default.Home),
-    HISTORY("History", Icons.Default.History),
-    DEVICES("Devices", Icons.Default.Devices),
-    SETTINGS("Settings", Icons.Default.Settings)
+private enum class Tab(val en: String, val id: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    HOME("Home", "Beranda", Icons.Default.Home),
+    HISTORY("History", "Riwayat", Icons.Default.History),
+    DEVICES("Devices", "Perangkat", Icons.Default.Devices),
+    SETTINGS("Settings", "Pengaturan", Icons.Default.Settings)
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LocalDropApp(store: LocalDropStore, onThemeChanged: (String) -> Unit) {
+fun LocalDropApp(store: LocalDropStore, onThemeChanged: (String) -> Unit, onLanguageChanged: (String) -> Unit) {
     val context = LocalContext.current
     // Share-sheet deep link: jump straight to Push mode to set the receiver address.
     val goToPush = (context as? android.app.Activity)?.intent
@@ -102,35 +106,20 @@ fun LocalDropApp(store: LocalDropStore, onThemeChanged: (String) -> Unit) {
     }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        when (tab) {
-                            Tab.HOME -> "LocalDrop"
-                            Tab.HISTORY -> "History"
-                            Tab.DEVICES -> "Devices"
-                            Tab.SETTINGS -> "Settings"
-                        },
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
-            )
-        },
         bottomBar = {
             Column {
             if (tab == Tab.HISTORY && ads?.ready == true && !serverRunning.running && !push.running && pending.isEmpty()) TestBanner()
             NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp) {
                 Tab.entries.forEach { t ->
+                    val label = tr(t.en, t.id)
                     NavigationBarItem(
                         selected = tab == t,
                         onClick = {
                             if (t == Tab.HOME && tab != Tab.HOME) ads?.naturalBreak(serverRunning.running || push.running, pending.isNotEmpty())
                             tab = t
                         },
-                        icon = { Icon(t.icon, contentDescription = t.label) },
-                        label = { Text(t.label) }
+                        icon = { Icon(t.icon, contentDescription = label) },
+                        label = { Text(label, style = MaterialTheme.typography.labelSmall) }
                     )
                 }
             }
@@ -152,6 +141,7 @@ fun LocalDropApp(store: LocalDropStore, onThemeChanged: (String) -> Unit) {
                 Tab.SETTINGS -> SettingsScreen(
                     store = store,
                     onThemeChanged = onThemeChanged,
+                    onLanguageChanged = onLanguageChanged,
                     onShowGuide = { guideMode = it },
                     onOpenDevices = { tab = Tab.DEVICES },
                     ads = ads,

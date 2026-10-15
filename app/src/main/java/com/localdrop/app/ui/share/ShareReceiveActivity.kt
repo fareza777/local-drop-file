@@ -32,9 +32,9 @@ import com.localdrop.app.data.LocalDropStore
 import com.localdrop.app.ui.theme.LocalDropTheme
 
 /**
- * Share Sheet target: "Share → LocalDrop" from any app lands here with
+ * Share Sheet target: "Share → Pushvia" from any app lands here with
  * ACTION_SEND / ACTION_SEND_MULTIPLE. Pushes straight to the paired PC using the
- * saved receiver address — no need to open LocalDrop or pick a destination.
+ * saved receiver address — no need to open Pushvia or pick a destination.
  */
 class ShareReceiveActivity : ComponentActivity() {
 

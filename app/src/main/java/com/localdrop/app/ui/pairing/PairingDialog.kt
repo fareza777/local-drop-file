@@ -16,6 +16,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.localdrop.app.TransferServerService
 import com.localdrop.app.server.LocalHttpServer
+import com.localdrop.app.ui.tr
 
 /**
  * Shown on the phone when a desktop asks to pair. The user must approve here. The PIN shown
@@ -30,13 +31,13 @@ fun PairingDialog(request: LocalHttpServer.PairRequest) {
         onDismissRequest = { /* require an explicit choice */ },
         icon = { Icon(Icons.Default.Computer, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
         title = {
-            Text(if (approved) "Enter this PIN on your computer" else "Pair with ${request.deviceName}?", textAlign = TextAlign.Center)
+            Text(if (approved) tr("Enter this PIN on your computer", "Masukkan PIN ini di komputer Anda") else tr("Pair with ${request.deviceName}?", "Pasangkan dengan ${request.deviceName}?"), textAlign = TextAlign.Center)
         },
         text = {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (!approved) {
                     Text(
-                        "A computer is asking to connect to this phone. Only approve if you started this pairing on that computer.",
+                        tr("A computer is asking to connect to this phone. Only approve if you started this pairing on that computer.", "Sebuah komputer meminta terhubung ke ponsel ini. Setujui hanya jika Anda memulai pairing di komputer itu."),
                         style = MaterialTheme.typography.bodyMedium,
                         textAlign = TextAlign.Center
                     )
@@ -56,7 +57,7 @@ fun PairingDialog(request: LocalHttpServer.PairRequest) {
                         color = MaterialTheme.colorScheme.primary
                     )
                     Text(
-                        "The PIN expires in a few minutes. Keep this screen open until the computer confirms.",
+                        tr("The PIN expires in a few minutes. Keep this screen open until the computer confirms.", "PIN kedaluwarsa dalam beberapa menit. Biarkan layar ini terbuka sampai komputer mengonfirmasi."),
                         style = MaterialTheme.typography.bodySmall,
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -69,15 +70,15 @@ fun PairingDialog(request: LocalHttpServer.PairRequest) {
                 Button(onClick = {
                     TransferServerService.approvePairing(request.id)
                     approved = true
-                }) { Text("Approve") }
+                }) { Text(tr("Approve", "Setujui")) }
             } else {
-                Button(onClick = { TransferServerService.rejectPairing(request.id) }) { Text("Done") }
+                Button(onClick = { TransferServerService.rejectPairing(request.id) }) { Text(tr("Done", "Selesai")) }
             }
         },
         dismissButton = {
             if (!approved) {
                 TextButton(onClick = { TransferServerService.rejectPairing(request.id) }) {
-                    Text("Reject", color = MaterialTheme.colorScheme.error)
+                    Text(tr("Reject", "Tolak"), color = MaterialTheme.colorScheme.error)
                 }
             }
         }
